@@ -13,6 +13,15 @@ const BroadcastSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    description: {
+      type: String,
+      default: '',
+    },
+    campaignType: {
+      type: String,
+      enum: ['PROMOTIONAL', 'TRANSACTIONAL', 'REENGAGEMENT'],
+      default: 'PROMOTIONAL',
+    },
     templateName: {
       type: String,
       required: true,
@@ -21,14 +30,33 @@ const BroadcastSchema = new mongoose.Schema(
       type: String,
       default: 'en_US',
     },
+    headerMediaUrl: {
+      type: String,
+      default: '',
+    },
+    variables: {
+      type: [String],
+      default: [],
+    },
+    buttons: {
+      type: Array,
+      default: [],
+    },
     targetType: {
       type: String,
-      enum: ['all', 'group', 'tag'],
+      enum: ['all', 'group', 'tag', 'filter'],
       default: 'all',
     },
     targetValue: {
       type: String,
       default: '',
+    },
+    audienceFilter: {
+      tags: [String],
+      groups: [String],
+      city: String,
+      status: String,
+      leadScoreMin: Number,
     },
     scheduledAt: {
       type: Date,
@@ -36,16 +64,22 @@ const BroadcastSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['DRAFT', 'SCHEDULED', 'PROCESSING', 'COMPLETED', 'CANCELLED'],
+      enum: ['DRAFT', 'SCHEDULED', 'PROCESSING', 'PAUSED', 'COMPLETED', 'CANCELLED'],
       default: 'DRAFT',
       index: true,
     },
     stats: {
       total: { type: Number, default: 0 },
+      queued: { type: Number, default: 0 },
       sent: { type: Number, default: 0 },
       delivered: { type: Number, default: 0 },
       read: { type: Number, default: 0 },
       failed: { type: Number, default: 0 },
+    },
+    rates: {
+      deliveryRate: { type: Number, default: 0 },
+      readRate: { type: Number, default: 0 },
+      ctr: { type: Number, default: 0 },
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -58,5 +92,7 @@ const BroadcastSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+BroadcastSchema.index({ companyId: 1, status: 1, createdAt: -1 });
 
 export default mongoose.models.Broadcast || mongoose.model('Broadcast', BroadcastSchema);
