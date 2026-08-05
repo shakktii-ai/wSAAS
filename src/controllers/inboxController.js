@@ -7,28 +7,34 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 export const getConversations = async (req, res) => {
   try {
     await connectDB();
-    const { status = 'active', search, agentId } = req.query;
+    const { status = 'all', search, agentId } = req.query;
     const companyId = req.company._id;
 
     const query = { companyId };
 
-    if (status !== 'all') {
-      query.status = status;
+    if (status && status !== 'all') {
+      if (status === 'open') {
+        query.status = { $in: ['open', 'active'] };
+      } else {
+        query.status = status;
+      }
     }
 
     if (agentId) {
-      query.assignedAgentId = agentId;
+      query.$or = [{ assignedAgent: agentId }, { assignedAgentId: agentId }];
     }
 
     if (search) {
       query.$or = [
         { customerName: { $regex: search, $options: 'i' } },
         { customerPhone: { $regex: search, $options: 'i' } },
+        { waId: { $regex: search, $options: 'i' } },
         { lastMessage: { $regex: search, $options: 'i' } },
       ];
     }
 
     const conversations = await Conversation.find(query)
+      .populate('assignedAgent', 'name email avatar role')
       .populate('assignedAgentId', 'name email avatar role')
       .sort({ isPinned: -1, lastMessageAt: -1 });
 
@@ -46,6 +52,7 @@ export const getConversationThread = async (req, res) => {
     const companyId = req.company._id;
 
     const conversation = await Conversation.findOne({ _id: id, companyId })
+      .populate('assignedAgent', 'name email avatar role')
       .populate('assignedAgentId', 'name email avatar role');
 
     if (!conversation) {
@@ -82,10 +89,13 @@ export const assignAgentToConversation = async (req, res) => {
       return errorResponse(res, 'Conversation not found', 404);
     }
 
+    conversation.assignedAgent = agentId || null;
     conversation.assignedAgentId = agentId || null;
     await conversation.save();
 
-    const updated = await Conversation.findById(id).populate('assignedAgentId', 'name email avatar role');
+    const updated = await Conversation.findById(id)
+      .populate('assignedAgent', 'name email avatar role')
+      .populate('assignedAgentId', 'name email avatar role');
 
     return successResponse(res, updated, 'Agent assigned successfully');
   } catch (error) {
@@ -148,7 +158,7 @@ export const updateStatus = async (req, res) => {
     const { id } = req.query;
     const { status } = req.body;
 
-    if (!['active', 'archived', 'closed'].includes(status)) {
+    if (!['open', 'closed', 'active', 'archived'].includes(status)) {
       return errorResponse(res, 'Invalid status choice', 400);
     }
 

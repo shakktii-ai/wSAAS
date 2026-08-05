@@ -12,7 +12,7 @@ export const verifyWebhook = async (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_verify_token_secure_2026';
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026';
 
   if (mode && token) {
     if (mode === 'subscribe' && (token === expectedToken || token === 'syncchat_verify')) {
@@ -28,7 +28,7 @@ export const verifyWebhook = async (req, res) => {
 };
 
 /**
- * Inbound Webhook Event Handler (POST)
+ * Inbound Webhook Event Handler (POST) - Module 3
  */
 export const handleWebhookEvent = async (req, res) => {
   try {
@@ -38,7 +38,7 @@ export const handleWebhookEvent = async (req, res) => {
     // Fast 200 OK acknowledgment to Meta Graph API
     res.status(200).json({ status: 'EVENT_RECEIVED' });
 
-    if (body.object !== 'whatsapp_business_account') {
+    if (!body || body.object !== 'whatsapp_business_account') {
       return;
     }
 
@@ -48,48 +48,54 @@ export const handleWebhookEvent = async (req, res) => {
     if (!change) return;
 
     const phoneNumberId = change.metadata?.phone_number_id;
-    const displayPhoneNumber = change.metadata?.display_phone_number;
 
-    // Find Tenant Company by Phone Number ID
+    // Find Tenant Company by Phone Number ID or default active company
     let company = null;
     if (phoneNumberId) {
       company = await Company.findOne({ 'whatsappConfig.phoneNumberId': phoneNumberId });
     }
+    if (!company) {
+      company = await Company.findOne({ status: 'active' });
+    }
 
-    // Process Status Updates (sent, delivered, read, failed)
+    // Process Message Delivery/Read Status Updates
     if (change.statuses && change.statuses.length > 0) {
       for (const statusObj of change.statuses) {
-        const wamid = statusObj.id;
+        const metaMessageId = statusObj.id;
         const status = statusObj.status; // 'sent', 'delivered', 'read', 'failed'
 
         await Message.findOneAndUpdate(
-          { wamid },
+          { $or: [{ metaMessageId }, { wamid: metaMessageId }] },
           {
+            deliveryStatus: status,
             status,
             ...(statusObj.errors ? { errorDetails: statusObj.errors } : {}),
           }
         );
       }
 
-      await WebhookLog.create({
-        companyId: company ? company._id : null,
-        phoneNumberId: phoneNumberId || '',
-        eventType: 'status_updated',
-        payload: body,
-        status: 'PROCESSED',
-      });
+      if (company) {
+        await WebhookLog.create({
+          companyId: company._id,
+          phoneNumberId: phoneNumberId || '',
+          eventType: 'status_updated',
+          payload: body,
+          status: 'PROCESSED',
+        });
+      }
       return;
     }
 
-    // Process Incoming Messages & Button Replies
+    // Process Incoming Messages
     if (change.messages && change.messages.length > 0) {
       const incomingMsg = change.messages[0];
       const contact = change.contacts?.[0];
 
-      const senderPhone = incomingMsg.from;
-      const senderName = contact?.profile?.name || senderPhone;
-      const wamid = incomingMsg.id;
-      const msgType = incomingMsg.type;
+      const waId = contact?.wa_id || incomingMsg.from;
+      const customerPhone = incomingMsg.from || waId;
+      const customerName = contact?.profile?.name || waId;
+      const metaMessageId = incomingMsg.id;
+      const messageType = incomingMsg.type || 'text';
 
       if (!company) {
         console.warn(`Incoming WhatsApp message for unlinked Phone Number ID: ${phoneNumberId}`);
@@ -103,85 +109,97 @@ export const handleWebhookEvent = async (req, res) => {
         return;
       }
 
-      // Find or Create Conversation for Company Tenant
+      // Find existing conversation using waId or customerPhone
       let conversation = await Conversation.findOne({
         companyId: company._id,
-        customerPhone: senderPhone,
+        $or: [{ waId }, { customerPhone }],
       });
 
       if (!conversation) {
         conversation = await Conversation.create({
           companyId: company._id,
-          customerPhone: senderPhone,
-          customerName: senderName,
-          status: 'active',
+          waId,
+          customerPhone,
+          customerName,
+          status: 'open',
+          unreadCount: 0,
         });
       } else {
-        if (senderName && conversation.customerName !== senderName) {
-          conversation.customerName = senderName;
+        if (customerName && conversation.customerName !== customerName) {
+          conversation.customerName = customerName;
         }
       }
 
-      let messageContent = '';
+      let messageBody = '';
       let mediaUrl = '';
       let mediaCaption = '';
       let filename = '';
 
-      switch (msgType) {
+      switch (messageType) {
         case 'text':
-          messageContent = incomingMsg.text?.body || '';
+          messageBody = incomingMsg.text?.body || '';
           break;
 
         case 'image':
         case 'video':
         case 'document':
         case 'audio':
-          mediaUrl = incomingMsg[msgType]?.link || incomingMsg[msgType]?.id || '';
-          mediaCaption = incomingMsg[msgType]?.caption || '';
-          filename = incomingMsg[msgType]?.filename || '';
-          messageContent = mediaCaption || `[Inbound ${msgType.toUpperCase()}]`;
+          mediaUrl = incomingMsg[messageType]?.link || incomingMsg[messageType]?.id || '';
+          mediaCaption = incomingMsg[messageType]?.caption || '';
+          filename = incomingMsg[messageType]?.filename || '';
+          messageBody = mediaCaption || `[Inbound ${messageType.toUpperCase()}]`;
           break;
 
         case 'button':
-          messageContent = incomingMsg.button?.text || incomingMsg.button?.payload || '[Button Reply]';
+          messageBody = incomingMsg.button?.text || incomingMsg.button?.payload || '[Button Reply]';
           break;
 
         case 'interactive':
           if (incomingMsg.interactive?.type === 'button_reply') {
-            messageContent = incomingMsg.interactive.button_reply.title || '[Interactive Button]';
+            messageBody = incomingMsg.interactive.button_reply.title || '[Interactive Button]';
           } else if (incomingMsg.interactive?.type === 'list_reply') {
-            messageContent = incomingMsg.interactive.list_reply.title || '[List Reply]';
+            messageBody = incomingMsg.interactive.list_reply.title || '[List Reply]';
           } else {
-            messageContent = '[Interactive Reply]';
+            messageBody = '[Interactive Reply]';
           }
           break;
 
         default:
-          messageContent = `[${msgType.toUpperCase()} Message]`;
+          messageBody = `[${messageType.toUpperCase()} Message]`;
       }
 
-      // Check duplicate message by wamid
-      const existingMessage = await Message.findOne({ wamid });
+      // Save incoming message (Check duplicates by metaMessageId)
+      const existingMessage = await Message.findOne({
+        $or: [{ metaMessageId }, { wamid: metaMessageId }],
+      });
+
       if (!existingMessage) {
         await Message.create({
           companyId: company._id,
           conversationId: conversation._id,
-          wamid,
+          metaMessageId,
+          wamid: metaMessageId,
           direction: 'inbound',
-          type: msgType,
-          body: messageContent,
+          senderType: 'customer',
+          sender: {
+            name: customerName,
+            type: 'customer',
+          },
+          messageType,
+          type: messageType,
+          messageBody,
+          body: messageBody,
           mediaUrl,
           mediaCaption,
           filename,
+          deliveryStatus: 'delivered',
           status: 'delivered',
-          sender: {
-            name: senderName,
-            type: 'customer',
-          },
+          timestamp: new Date(),
         });
 
-        // Update Conversation Summary
-        conversation.lastMessage = messageContent;
+        // Update Conversation Last Message & Unread Count
+        conversation.lastMessage = messageBody;
+        conversation.lastMessageType = messageType;
         conversation.lastMessageAt = new Date();
         conversation.unreadCount = (conversation.unreadCount || 0) + 1;
         await conversation.save();
@@ -213,7 +231,7 @@ export const handleWebhookEvent = async (req, res) => {
 };
 
 /**
- * Fetch Webhook Inspection Audit Logs for Active Tenant
+ * Fetch Webhook Inspection Audit Logs
  */
 export const getWebhookLogs = async (req, res) => {
   try {

@@ -14,21 +14,48 @@ const MessageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    metaMessageId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
     wamid: {
       type: String,
-      unique: true,
       sparse: true,
       index: true,
     },
     direction: {
       type: String,
       enum: ['inbound', 'outbound'],
-      required: true,
+      default: 'inbound',
+    },
+    senderType: {
+      type: String,
+      enum: ['customer', 'agent', 'system'],
+      default: 'customer',
+    },
+    sender: {
+      id: mongoose.Schema.Types.ObjectId,
+      name: String,
+      type: {
+        type: String,
+        enum: ['customer', 'agent', 'user', 'system', 'bot'],
+        default: 'customer',
+      },
+    },
+    messageType: {
+      type: String,
+      enum: ['text', 'image', 'video', 'document', 'audio', 'template', 'button_reply', 'interactive'],
+      default: 'text',
     },
     type: {
       type: String,
       enum: ['text', 'image', 'video', 'document', 'audio', 'template', 'button_reply', 'interactive'],
-      required: true,
+      default: 'text',
+    },
+    messageBody: {
+      type: String,
+      default: '',
     },
     body: {
       type: String,
@@ -50,6 +77,12 @@ const MessageSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    deliveryStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'delivered', 'read', 'failed'],
+      default: 'pending',
+      index: true,
+    },
     status: {
       type: String,
       enum: ['pending', 'sent', 'delivered', 'read', 'failed'],
@@ -60,14 +93,9 @@ const MessageSchema = new mongoose.Schema(
       type: Object,
       default: null,
     },
-    sender: {
-      id: mongoose.Schema.Types.ObjectId,
-      name: String,
-      type: {
-        type: String,
-        enum: ['user', 'customer', 'system', 'bot'],
-        default: 'customer',
-      },
+    timestamp: {
+      type: Date,
+      default: Date.now,
     },
   },
   {

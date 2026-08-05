@@ -8,6 +8,12 @@ const ConversationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    waId: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
     customerPhone: {
       type: String,
       required: true,
@@ -21,6 +27,11 @@ const ConversationSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    lastMessageType: {
+      type: String,
+      enum: ['text', 'image', 'video', 'document', 'audio', 'template', 'interactive', 'button_reply'],
+      default: 'text',
+    },
     lastMessageAt: {
       type: Date,
       default: Date.now,
@@ -31,9 +42,14 @@ const ConversationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'archived', 'closed'],
-      default: 'active',
+      enum: ['open', 'closed', 'active', 'archived'],
+      default: 'open',
       index: true,
+    },
+    assignedAgent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     assignedAgentId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -62,6 +78,6 @@ const ConversationSchema = new mongoose.Schema(
   }
 );
 
-ConversationSchema.index({ companyId: 1, customerPhone: 1 }, { unique: true });
+ConversationSchema.index({ companyId: 1, waId: 1 }, { unique: true });
 
 export default mongoose.models.Conversation || mongoose.model('Conversation', ConversationSchema);

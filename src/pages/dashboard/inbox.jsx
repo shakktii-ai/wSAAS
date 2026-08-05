@@ -17,6 +17,7 @@ import {
   Clock,
   Archive,
   CheckCircle,
+  XCircle,
   MoreVertical,
   Paperclip,
   Smile,
@@ -25,6 +26,10 @@ import {
   Phone,
   Tag,
   Plus,
+  Image as ImageIcon,
+  File as FileIcon,
+  Video as VideoIcon,
+  Music as AudioIcon,
 } from 'lucide-react';
 
 export default function SharedInbox() {
@@ -35,13 +40,12 @@ export default function SharedInbox() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('open'); // 'open' | 'closed' | 'all'
 
   // Input state
   const [inputText, setInputText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const [internalNoteText, setInternalNoteText] = useState('');
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'notes'
 
   const messagesEndRef = useRef(null);
 
@@ -75,7 +79,6 @@ export default function SharedInbox() {
       if (res.success && res.data) {
         setSelectedConversation(res.data.conversation);
         setMessages(res.data.messages);
-        // Refresh conversation unread count in list
         fetchConversations();
       }
     } catch (err) {
@@ -101,8 +104,9 @@ export default function SharedInbox() {
     setInputText('');
 
     try {
+      const targetPhone = selectedConversation.waId || selectedConversation.customerPhone;
       const res = await api.post('/whatsapp/send', {
-        to: selectedConversation.customerPhone,
+        to: targetPhone,
         type: 'text',
         body,
       });
@@ -112,7 +116,7 @@ export default function SharedInbox() {
         fetchConversations();
       }
     } catch (err) {
-      alert(err.message || 'Failed to send message');
+      alert(err.message || 'Failed to send message via Meta Cloud API');
     } finally {
       setSendingMsg(false);
     }
@@ -128,6 +132,20 @@ export default function SharedInbox() {
       }
     } catch (err) {
       alert(err.message || 'Failed to assign agent');
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!selectedConversation) return;
+    const newStatus = selectedConversation.status === 'closed' ? 'open' : 'closed';
+    try {
+      const res = await api.put(`/inbox/conversations/${selectedConversation._id}/status`, { status: newStatus });
+      if (res.success && res.data) {
+        setSelectedConversation(res.data);
+        fetchConversations();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to update status');
     }
   };
 
@@ -165,31 +183,46 @@ export default function SharedInbox() {
   return (
     <DashboardLayout>
       <div className="h-[calc(100vh-6rem)] flex gap-4 overflow-hidden">
-        {/* Left Column: Conversations Directory */}
+        {/* Module 4: Shared Inbox Conversation List */}
         <div className="w-80 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-col overflow-hidden flex-shrink-0">
-          {/* Header & Filter */}
           <div className="p-3 border-b border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-white text-sm flex items-center gap-2">
                 <MessageCircle className="w-4 h-4 text-emerald-400" /> Shared Inbox
               </h2>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-950 text-slate-300 text-xs rounded-lg px-2 py-1 border border-slate-800 focus:outline-none"
-              >
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-                <option value="closed">Closed</option>
-                <option value="all">All Chats</option>
-              </select>
+              <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
+                <button
+                  onClick={() => setStatusFilter('open')}
+                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                    statusFilter === 'open' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Open
+                </button>
+                <button
+                  onClick={() => setStatusFilter('closed')}
+                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                    statusFilter === 'closed' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Closed
+                </button>
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                    statusFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All
+                </button>
+              </div>
             </div>
 
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search phone or text..."
+                placeholder="Search name, phone, waId..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
@@ -197,10 +230,11 @@ export default function SharedInbox() {
             </div>
           </div>
 
-          {/* Conversations List */}
+          {/* Conversations Directory */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 scrollbar-thin">
             {conversations.map((conv) => {
               const isSelected = selectedConversation?._id === conv._id;
+              const phoneDisplay = conv.waId || conv.customerPhone;
               return (
                 <div
                   key={conv._id}
@@ -216,21 +250,24 @@ export default function SharedInbox() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                       <p className="text-xs font-semibold text-white truncate flex items-center gap-1">
-                        {conv.customerName || conv.customerPhone}
+                        {conv.customerName || phoneDisplay}
                         {conv.isPinned && <Pin className="w-3 h-3 text-emerald-400 fill-current" />}
                       </p>
                       <span className="text-[10px] text-slate-500 font-mono">
-                        {new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(conv.lastMessageAt || conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
                     <p className="text-xs text-slate-400 truncate">{conv.lastMessage || 'No messages yet'}</p>
 
-                    {conv.assignedAgentId && (
-                      <p className="text-[10px] text-emerald-400/80 mt-1 flex items-center gap-1">
-                        <UserCheck className="w-3 h-3" /> {conv.assignedAgentId.name}
-                      </p>
-                    )}
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] font-mono text-slate-500">{phoneDisplay}</span>
+                      {(conv.assignedAgent?.name || conv.assignedAgentId?.name) && (
+                        <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                          {conv.assignedAgent?.name || conv.assignedAgentId?.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {conv.unreadCount > 0 && (
@@ -244,7 +281,7 @@ export default function SharedInbox() {
           </div>
         </div>
 
-        {/* Center Column: Live Conversation Thread */}
+        {/* Module 5: Chat Window Thread */}
         <div className="flex-1 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-col overflow-hidden min-w-0">
           {selectedConversation ? (
             <>
@@ -257,16 +294,36 @@ export default function SharedInbox() {
                   <div>
                     <h3 className="text-xs font-bold text-white flex items-center gap-2">
                       {selectedConversation.customerName}
-                      <span className="text-[10px] font-normal text-slate-400">({selectedConversation.customerPhone})</span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        ({selectedConversation.waId || selectedConversation.customerPhone})
+                      </span>
                     </h3>
-                    <p className="text-[10px] text-slate-400">WhatsApp Cloud API Live Thread</p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                          selectedConversation.status === 'closed'
+                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}
+                      >
+                        {selectedConversation.status || 'Open'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Agent Assign Select */}
+                  <Button
+                    size="sm"
+                    variant={selectedConversation.status === 'closed' ? 'secondary' : 'danger'}
+                    onClick={handleToggleStatus}
+                    className="text-xs py-1 px-2.5"
+                  >
+                    {selectedConversation.status === 'closed' ? 'Reopen Chat' : 'Close Chat'}
+                  </Button>
+
                   <select
-                    value={selectedConversation.assignedAgentId?._id || ''}
+                    value={selectedConversation.assignedAgent?._id || selectedConversation.assignedAgentId?._id || ''}
                     onChange={(e) => handleAssignAgent(e.target.value)}
                     className="bg-slate-950 text-slate-300 text-xs rounded-lg px-2 py-1 border border-slate-800 focus:outline-none"
                   >
@@ -295,33 +352,69 @@ export default function SharedInbox() {
               {/* Chat Message History */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-wa-darkBg scrollbar-thin">
                 {messages.map((msg) => {
-                  const isOutbound = msg.direction === 'outbound';
+                  const isOutbound = msg.direction === 'outbound' || msg.senderType === 'agent';
+                  const mType = msg.messageType || msg.type || 'text';
+                  const mBody = msg.messageBody || msg.body || '';
+                  const mStatus = msg.deliveryStatus || msg.status || 'sent';
+
                   return (
-                    <div
-                      key={msg._id}
-                      className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-                    >
+                    <div key={msg._id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
                       <div
                         className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-md ${
-                          isOutbound
-                            ? 'bg-wa-bubbleOut text-white rounded-tr-none'
-                            : 'bg-wa-bubbleIn text-slate-200 rounded-tl-none'
+                          isOutbound ? 'bg-wa-bubbleOut text-white rounded-tr-none' : 'bg-wa-bubbleIn text-slate-200 rounded-tl-none'
                         }`}
                       >
                         {!isOutbound && (
-                          <p className="font-bold text-[10px] text-emerald-400 mb-1">{msg.sender?.name || 'Customer'}</p>
+                          <p className="font-bold text-[10px] text-emerald-400 mb-1">
+                            {msg.sender?.name || selectedConversation.customerName || 'Customer'}
+                          </p>
                         )}
 
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.body}</p>
+                        {/* Media rendering for images, docs, video, audio */}
+                        {mType === 'image' && msg.mediaUrl && (
+                          <div className="mb-2">
+                            <img src={msg.mediaUrl} alt="Attachment" className="rounded-lg max-h-48 object-cover w-full" />
+                          </div>
+                        )}
+
+                        {mType === 'document' && msg.mediaUrl && (
+                          <a
+                            href={msg.mediaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-2 rounded-lg bg-slate-950/40 border border-slate-800 mb-2 hover:bg-slate-900"
+                          >
+                            <FileIcon className="w-4 h-4 text-emerald-400" />
+                            <span className="underline truncate">{msg.filename || 'Document Attachment'}</span>
+                          </a>
+                        )}
+
+                        {mType === 'audio' && msg.mediaUrl && (
+                          <audio controls className="w-full mb-2">
+                            <source src={msg.mediaUrl} />
+                          </audio>
+                        )}
+
+                        {mType === 'video' && msg.mediaUrl && (
+                          <video controls className="w-full rounded-lg max-h-48 mb-2">
+                            <source src={msg.mediaUrl} />
+                          </video>
+                        )}
+
+                        <p className="whitespace-pre-wrap leading-relaxed">{mBody}</p>
 
                         <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-slate-400">
-                          <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>
+                            {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                           {isOutbound && (
                             <span>
-                              {msg.status === 'read' ? (
+                              {mStatus === 'read' ? (
                                 <CheckCheck className="w-3 h-3 text-sky-400" />
-                              ) : msg.status === 'delivered' ? (
+                              ) : mStatus === 'delivered' ? (
                                 <CheckCheck className="w-3 h-3 text-slate-400" />
+                              ) : mStatus === 'failed' ? (
+                                <XCircle className="w-3 h-3 text-rose-400" />
                               ) : (
                                 <Check className="w-3 h-3 text-slate-400" />
                               )}
@@ -335,7 +428,7 @@ export default function SharedInbox() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input Action Bar */}
+              {/* Reply Input Bar */}
               <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-800 bg-slate-950 flex items-center gap-2">
                 <input
                   type="text"
@@ -352,30 +445,30 @@ export default function SharedInbox() {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
               <MessageCircle className="w-10 h-10 text-slate-700 mb-2" />
-              Select a conversation from the left to start live customer chat.
+              Select a conversation from the left to open live WhatsApp chat.
             </div>
           )}
         </div>
 
-        {/* Right Inspector Column: Internal Notes & Details */}
+        {/* Right Details Inspector */}
         {selectedConversation && (
           <div className="w-72 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col flex-shrink-0 space-y-4 overflow-y-auto scrollbar-thin">
             <div>
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <User className="w-4 h-4 text-emerald-400" /> Contact Profile
+                <User className="w-4 h-4 text-emerald-400" /> Customer Profile
               </h4>
               <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
                 <p className="font-semibold text-white">{selectedConversation.customerName}</p>
-                <p className="text-slate-400 flex items-center gap-1">
-                  <Phone className="w-3 h-3" /> {selectedConversation.customerPhone}
+                <p className="text-slate-400 flex items-center gap-1 font-mono">
+                  <Phone className="w-3 h-3" /> {selectedConversation.waId || selectedConversation.customerPhone}
                 </p>
               </div>
             </div>
 
-            {/* Internal Team Notes */}
+            {/* Internal Notes */}
             <div className="flex-1 flex flex-col">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <StickyNote className="w-4 h-4 text-amber-400" /> Private Internal Notes
+                <StickyNote className="w-4 h-4 text-amber-400" /> Team Internal Notes
               </h4>
 
               <form onSubmit={handleAddNote} className="mb-3">
