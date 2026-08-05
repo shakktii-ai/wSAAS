@@ -5,6 +5,7 @@ export default async function handler(req, res) {
     return verifyWebhook(req, res);
   }
   if (req.method === 'POST') {
+    console.log('Incoming Meta Webhook POST Body:', JSON.stringify(req.body, null, 2));
     return handleWebhookEvent(req, res);
   }
   res.setHeader('Allow', ['GET', 'POST']);
