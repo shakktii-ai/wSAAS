@@ -40,6 +40,21 @@ const CompanySchema = new mongoose.Schema(
       enum: ['free', 'pro', 'enterprise'],
       default: 'pro',
     },
+    // Meta Embedded Signup Fields
+    metaBusinessId: { type: String, default: '' },
+    wabaId: { type: String, default: '' },
+    phoneNumberId: { type: String, default: '' },
+    displayPhoneNumber: { type: String, default: '' },
+    businessName: { type: String, default: '' },
+    accessToken: { type: String, default: '' },
+    tokenType: { type: String, default: 'bearer' },
+    tokenExpiry: { type: Date, default: null },
+    webhookVerified: { type: Boolean, default: true },
+    qualityRating: { type: String, default: 'GREEN' },
+    messagingLimit: { type: String, default: 'TIER_1K' },
+    isConnected: { type: Boolean, default: false },
+    connectedAt: { type: Date, default: null },
+
     whatsappConfig: {
       phoneNumberId: { type: String, default: '' },
       wabaId: { type: String, default: '' },

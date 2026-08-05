@@ -1,351 +1,402 @@
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
-import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import {
-  MessageSquare,
-  Send,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Zap,
+  Phone,
+  ShieldCheck,
+  Award,
+  Layers,
   FileText,
-  Terminal,
-  Wifi,
-  WifiOff,
-  Image as ImageIcon,
-  Video,
-  File,
-  Mic,
-  CheckCircle2,
+  Unlink,
+  ExternalLink,
+  QrCode,
+  QrCode as ScanIcon,
+  MessageSquare,
   AlertCircle,
+  Check,
 } from 'lucide-react';
 
 export default function WhatsAppHub() {
-  const { company } = useAuth();
-  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
-  
-  // Test Message Form State
-  const [recipient, setRecipient] = useState('');
-  const [messageType, setMessageType] = useState('text');
-  const [textBody, setTextBody] = useState('Hello from SyncChat Enterprise WhatsApp Platform!');
-  const [mediaUrl, setMediaUrl] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe');
-  const [mediaCaption, setMediaCaption] = useState('SyncChat Welcome Graphic');
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState(null);
-  const [sendError, setSendError] = useState('');
+  const [account, setAccount] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  const phoneNumberId = company?.whatsappConfig?.phoneNumberId || process.env.NEXT_PUBLIC_META_PHONE_NUMBER_ID || '1279365541920553';
-  const wabaId = company?.whatsappConfig?.wabaId || process.env.NEXT_PUBLIC_META_WABA_ID || '27142090378802643';
-  const isWabaConnected = company?.whatsappConfig?.status === 'CONNECTED' || Boolean(phoneNumberId && wabaId);
+  // Manual fallback inputs modal
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualPhoneId, setManualPhoneId] = useState('');
+  const [manualWabaId, setManualWabaId] = useState('');
 
-  const handleSendTestMessage = async (e) => {
-    e.preventDefault();
-    setSending(true);
-    setSendResult(null);
-    setSendError('');
-
+  const fetchAccount = async () => {
     try {
-      const res = await api.post('/whatsapp/send', {
-        to: recipient,
-        type: messageType,
-        body: textBody,
-        mediaUrl: ['image', 'video', 'document', 'audio'].includes(messageType) ? mediaUrl : undefined,
-        mediaCaption: ['image', 'video', 'document'].includes(messageType) ? mediaCaption : undefined,
-      });
-
-      if (res.success) {
-        setSendResult(res.data);
-      }
-    } catch (err) {
-      setSendError(err.message || 'Failed to send WhatsApp message');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // QR Code Scanner State
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [qrData, setQrData] = useState(null);
-  const [prefilledText, setPrefilledText] = useState('Hello SyncChat Team! I would like to enquire about your WhatsApp services.');
-  const [fetchingQr, setFetchingQr] = useState(false);
-
-  const fetchQrCode = async (text) => {
-    try {
-      setFetchingQr(true);
-      const res = await api.get(`/company/whatsapp/qrcode?prefilledText=${encodeURIComponent(text || prefilledText)}`);
+      setLoading(true);
+      const res = await api.get('/meta/account');
       if (res.success && res.data) {
-        setQrData(res.data);
+        setAccount(res.data);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Fetch Account Error:', err);
     } finally {
-      setFetchingQr(false);
+      setLoading(false);
     }
   };
 
-  const openQrModal = () => {
-    setIsQrModalOpen(true);
-    fetchQrCode(prefilledText);
+  useEffect(() => {
+    fetchAccount();
+
+    // Load Meta Facebook SDK dynamically
+    if (typeof window !== 'undefined' && !window.FB) {
+      window.fbAsyncInit = function () {
+        window.FB.init({
+          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '2388907868182234',
+          cookie: true,
+          xfbml: true,
+          version: 'v20.0',
+        });
+      };
+      (function (d, s, id) {
+        var js,
+          fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s);
+        js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        fjs.parentNode.insertBefore(js, fjs);
+      })(document, 'script', 'facebook-jssdk');
+    }
+
+    // Listen to Meta Embedded Signup session events from popup window
+    const handleMetaMessage = async (event) => {
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.event === 'FINISH') {
+            const { waba_id, phone_number_id } = data.data;
+            await completeExchange({ wabaId: waba_id, phoneNumberId: phone_number_id });
+          } else if (data.event === 'CANCEL') {
+            alert('Meta Embedded Signup was cancelled by user.');
+            setConnecting(false);
+          }
+        }
+      } catch (e) {
+        // Non-JSON message ignore
+      }
+    };
+
+    window.addEventListener('message', handleMetaMessage);
+    return () => window.removeEventListener('message', handleMetaMessage);
+  }, []);
+
+  const completeExchange = async (payload) => {
+    try {
+      setConnecting(true);
+      const res = await api.post('/meta/exchange-token', payload);
+      if (res.success) {
+        alert('WhatsApp Business Account connected successfully!');
+        fetchAccount();
+      } else {
+        alert(res.message || 'Token exchange failed');
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to connect WhatsApp account');
+    } finally {
+      setConnecting(false);
+    }
   };
+
+  // Launch Meta Embedded Signup Popup
+  const launchEmbeddedSignup = () => {
+    setConnecting(true);
+
+    if (typeof window !== 'undefined' && window.FB) {
+      window.FB.login(
+        (response) => {
+          if (response.authResponse) {
+            const code = response.authResponse.code;
+            completeExchange({ code });
+          } else {
+            // Fallback to manual setup
+            setConnecting(false);
+            setShowManualModal(true);
+          }
+        },
+        {
+          scope: 'whatsapp_business_management,whatsapp_business_messaging',
+          extras: {
+            setup: {},
+            featureType: '',
+            sessionInfoVersion: '2',
+          },
+        }
+      );
+    } else {
+      // Fallback
+      setShowManualModal(true);
+      setConnecting(false);
+    }
+  };
+
+  const handleManualConnect = async (e) => {
+    e.preventDefault();
+    await completeExchange({
+      phoneNumberId: manualPhoneId || process.env.META_PHONE_NUMBER_ID,
+      wabaId: manualWabaId || process.env.META_WABA_ID,
+    });
+    setShowManualModal(false);
+  };
+
+  const handleSyncTemplates = async () => {
+    try {
+      setSyncing(true);
+      const res = await api.get('/meta/templates');
+      if (res.success) {
+        alert(`Templates synchronized cleanly! Total: ${res.data.summary.total}`);
+        fetchAccount();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to sync templates');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect your WhatsApp Business Account?')) return;
+    try {
+      const res = await api.post('/meta/disconnect');
+      if (res.success) {
+        alert('Disconnected successfully');
+        fetchAccount();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to disconnect');
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-slate-400">
+          <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading Meta WhatsApp Business configuration...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const isConnected = account?.isConnected;
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-emerald-400" /> Meta WhatsApp Cloud API Hub
+              <Zap className="w-5 h-5 text-emerald-400" /> WhatsApp Business Integration
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Manage Meta WABA credentials, scan QR access code, dispatch test payloads & sync templates.
+              Connect your WhatsApp Business Account via Meta Embedded Signup (AiSensy, WATI & Interakt standard)
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={openQrModal}>
-              📱 Business QR Code
+
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={fetchAccount} loading={loading}>
+              Refresh
             </Button>
-            <Link href="/dashboard/whatsapp/templates">
-              <Button variant="secondary" icon={FileText}>
-                Templates
+            {isConnected && (
+              <Button variant="secondary" size="sm" icon={Layers} onClick={handleSyncTemplates} loading={syncing}>
+                Sync Templates
               </Button>
-            </Link>
-            <Link href="/dashboard/whatsapp/logs">
-              <Button variant="secondary" icon={Terminal}>
-                Logs
-              </Button>
-            </Link>
-            <Button icon={Send} disabled={!isWabaConnected} onClick={() => setIsTestModalOpen(true)}>
-              Test Payload
-            </Button>
+            )}
           </div>
         </div>
 
-        {/* Credentials Summary Card */}
-        <Card title="WABA Connection Overview">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-xs text-slate-400 font-medium">Account Status</span>
-              <div className="flex items-center gap-2 mt-2">
-                {isWabaConnected ? (
-                  <>
-                    <Wifi className="w-5 h-5 text-emerald-400" />
-                    <span className="text-base font-bold text-emerald-400">Connected</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="w-5 h-5 text-amber-400" />
-                    <span className="text-base font-bold text-amber-400">Disconnected</span>
-                  </>
-                )}
+        {/* Main Status & Signup Card */}
+        <Card className="border border-slate-800 bg-slate-900/80 backdrop-blur-xl relative overflow-hidden p-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
+                  isConnected
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}
+              >
+                <Phone className="w-7 h-7" />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-white">
+                    {isConnected ? account.businessName || 'Connected Business WABA' : 'No WhatsApp Account Connected'}
+                  </h2>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                      isConnected
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                    }`}
+                  >
+                    {isConnected ? '● Connected & Active' : 'Disconnected'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {isConnected
+                    ? `Live Phone Number: ${account.displayPhoneNumber} • WABA ID: ${account.wabaId}`
+                    : 'Click "Connect WhatsApp Business" below to launch Meta Embedded Signup'}
+                </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-xs text-slate-400 font-medium">Phone Number ID</span>
-              <p className="text-sm font-mono text-white truncate mt-2">
-                {phoneNumberId}
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <span className="text-xs text-slate-400 font-medium">WABA Account ID</span>
-              <p className="text-sm font-mono text-white truncate mt-2">
-                {wabaId}
-              </p>
+            <div>
+              {isConnected ? (
+                <Button variant="danger" size="sm" icon={Unlink} onClick={handleDisconnect}>
+                  Disconnect WABA
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  loading={connecting}
+                  onClick={launchEmbeddedSignup}
+                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20"
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" /> Connect WhatsApp Business
+                </Button>
+              )}
             </div>
           </div>
         </Card>
 
-        {/* Message Capability Matrix */}
-        <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">
-            Supported Outbound Message Engines
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Card title="Text Engine" subtitle="Plain text & URL previews">
-              <p className="text-xs text-slate-400">Send formatted text messages with emoji and link previews.</p>
+        {/* Account Details & Health Grid */}
+        {isConnected && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Phone Number ID</p>
+                  <p className="text-xs font-mono font-bold text-white mt-0.5">{account.phoneNumberId}</p>
+                </div>
+              </div>
             </Card>
-            <Card title="Image & Media" subtitle="JPEG, PNG, WebP">
-              <p className="text-xs text-slate-400">High-resolution image dispatch with dynamic captions.</p>
+
+            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">WABA ID</p>
+                  <p className="text-xs font-mono font-bold text-white mt-0.5">{account.wabaId}</p>
+                </div>
+              </div>
             </Card>
-            <Card title="Video & Document" subtitle="MP4, PDF, DOCX">
-              <p className="text-xs text-slate-400">Send media attachments with custom filenames.</p>
+
+            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Quality Rating</p>
+                  <p className="text-xs font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" /> {account.qualityRating}
+                  </p>
+                </div>
+              </div>
             </Card>
-            <Card title="Audio Notes" subtitle="AAC, MP3, Voice">
-              <p className="text-xs text-slate-400">Dispatch voice clips and audio broadcasts.</p>
-            </Card>
-            <Card title="Meta Templates" subtitle="Pre-Approved HSM">
-              <p className="text-xs text-slate-400">Send marketing & utility templates with variable parameters.</p>
-            </Card>
-            <Card title="Interactive Buttons" subtitle="Quick Reply & List">
-              <p className="text-xs text-slate-400">Process button clicks and list selections via webhooks.</p>
+
+            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Synced Templates</p>
+                  <p className="text-xs font-bold text-white mt-0.5">{account.templateCount} Templates</p>
+                </div>
+              </div>
             </Card>
           </div>
-        </div>
+        )}
 
-        {/* Test Payload Sender Modal */}
-        <Modal isOpen={isTestModalOpen} onClose={() => setIsTestModalOpen(false)} title="Send Test WhatsApp Payload">
-          {sendError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> {sendError}
-            </div>
-          )}
-
-          {sendResult && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" /> Message dispatched! WAMID: {sendResult.message?.wamid}
-            </div>
-          )}
-
-          <form onSubmit={handleSendTestMessage} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                Recipient Phone Number (with Country Code) *
-              </label>
-              <input
-                type="text"
-                required
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                placeholder="e.g. 15551234567"
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
-              />
+        {/* Integration Instructions & Enterprise Features */}
+        <Card className="p-6 bg-slate-900/60 border border-slate-800">
+          <h3 className="text-sm font-bold text-white mb-3">Enterprise Meta Cloud API Features</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
+              <p className="font-semibold text-emerald-400">⚡ 1-Click Embedded Signup</p>
+              <p className="text-slate-400">
+                Customers connect their Meta WhatsApp Business Account directly without technical setup.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                Payload Type
-              </label>
-              <select
-                value={messageType}
-                onChange={(e) => setMessageType(e.target.value)}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
-              >
-                <option value="text">Text Message</option>
-                <option value="image">Image Attachment</option>
-                <option value="video">Video Attachment</option>
-                <option value="document">Document Attachment</option>
-                <option value="audio">Audio Attachment</option>
-              </select>
+            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
+              <p className="font-semibold text-teal-400">🔄 Auto Template Sync</p>
+              <p className="text-slate-400">
+                Synchronizes pre-approved Meta message templates directly into local collection.
+              </p>
             </div>
 
-            {messageType === 'text' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                  Message Text
-                </label>
-                <textarea
-                  rows={3}
-                  value={textBody}
-                  onChange={(e) => setTextBody(e.target.value)}
-                  className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
-            )}
-
-            {['image', 'video', 'document', 'audio'].includes(messageType) && (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Public Media Direct URL *
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Media Caption (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={mediaCaption}
-                    onChange={(e) => setMediaCaption(e.target.value)}
-                    placeholder="Attachment description"
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="secondary" onClick={() => setIsTestModalOpen(false)}>
-                Close
-              </Button>
-              <Button type="submit" loading={sending} icon={Send}>
-                Dispatch Payload
-              </Button>
-            </div>
-          </form>
-        </Modal>
-
-        {/* WhatsApp QR Code Access & Scanner Modal */}
-        <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="WhatsApp Business Access QR Code">
-          <div className="space-y-4 text-center">
-            <p className="text-xs text-slate-300">
-              Scan this QR Code using any WhatsApp phone camera to open a direct customer conversation thread with your business account.
-            </p>
-
-            <div className="flex justify-center p-4 bg-slate-950 rounded-2xl border border-slate-800">
-              {fetchingQr ? (
-                <div className="py-12 text-xs text-slate-400">Generating WhatsApp QR Code...</div>
-              ) : qrData?.qrCodeImageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={qrData.qrCodeImageUrl}
-                  alt="WhatsApp Business QR Code"
-                  className="w-56 h-56 rounded-xl border border-emerald-500/30 p-2 bg-slate-900 shadow-xl shadow-emerald-500/10"
-                />
-              ) : (
-                <div className="py-12 text-xs text-rose-400">Failed to load QR code</div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1 text-left">
-                Prefilled Customer Message
-              </label>
-              <input
-                type="text"
-                value={prefilledText}
-                onChange={(e) => {
-                  setPrefilledText(e.target.value);
-                  fetchQrCode(e.target.value);
-                }}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60 font-mono"
-              />
-            </div>
-
-            {qrData?.whatsappDeepLink && (
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-left">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">WhatsApp Direct Deep Link:</span>
-                <a
-                  href={qrData.whatsappDeepLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-mono text-emerald-400 underline break-all"
-                >
-                  {qrData.whatsappDeepLink}
-                </a>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setIsQrModalOpen(false)}>
-                Close
-              </Button>
+            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
+              <p className="font-semibold text-purple-400">🔒 Token Security & Webhooks</p>
+              <p className="text-slate-400">
+                Access tokens are stored encrypted server-side; webhooks deliver real-time messages.
+              </p>
             </div>
           </div>
-        </Modal>
+        </Card>
       </div>
+
+      {/* Manual Connection Modal Fallback */}
+      <Modal isOpen={showManualModal} onClose={() => setShowManualModal(false)} title="Connect Meta WABA Credentials">
+        <form onSubmit={handleManualConnect} className="space-y-4 text-xs">
+          <p className="text-slate-400">
+            Enter your Meta Phone Number ID and WABA ID to complete instant connection:
+          </p>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">Phone Number ID</label>
+            <input
+              type="text"
+              value={manualPhoneId}
+              onChange={(e) => setManualPhoneId(e.target.value)}
+              placeholder="1279365541920553"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-medium mb-1">WABA ID</label>
+            <input
+              type="text"
+              value={manualWabaId}
+              onChange={(e) => setManualWabaId(e.target.value)}
+              placeholder="27142090378802643"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setShowManualModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={connecting}>
+              Connect WABA Account
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </DashboardLayout>
   );
 }
