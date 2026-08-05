@@ -45,12 +45,12 @@ const MessageSchema = new mongoose.Schema(
     },
     messageType: {
       type: String,
-      enum: ['text', 'image', 'video', 'document', 'audio', 'template', 'button_reply', 'interactive'],
+      enum: ['text', 'image', 'video', 'document', 'audio', 'location', 'contacts', 'sticker', 'template', 'button_reply', 'interactive'],
       default: 'text',
     },
     type: {
       type: String,
-      enum: ['text', 'image', 'video', 'document', 'audio', 'template', 'button_reply', 'interactive'],
+      enum: ['text', 'image', 'video', 'document', 'audio', 'location', 'contacts', 'sticker', 'template', 'button_reply', 'interactive'],
       default: 'text',
     },
     messageBody: {
@@ -73,6 +73,19 @@ const MessageSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Location Details
+    location: {
+      latitude: Number,
+      longitude: Number,
+      name: String,
+      address: String,
+    },
+    // Contact Card Details
+    contactCard: {
+      name: String,
+      phone: String,
+      waId: String,
+    },
     templateName: {
       type: String,
       default: '',
@@ -93,6 +106,15 @@ const MessageSchema = new mongoose.Schema(
       type: Object,
       default: null,
     },
+    replyToMessageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     timestamp: {
       type: Date,
       default: Date.now,
@@ -102,5 +124,7 @@ const MessageSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+MessageSchema.index({ companyId: 1, conversationId: 1, createdAt: 1 });
 
 export default mongoose.models.Message || mongoose.model('Message', MessageSchema);

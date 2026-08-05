@@ -54,7 +54,7 @@ export async function sendMetaText({ phoneNumberId, accessToken, to, text }) {
 }
 
 /**
- * Send Media Message (image, video, document, audio)
+ * Send Media Message (image, video, document, audio, sticker)
  */
 export async function sendMetaMedia({ phoneNumberId, accessToken, to, type, mediaUrl, caption, filename }) {
   const mediaPayload = { link: mediaUrl };
@@ -72,6 +72,54 @@ export async function sendMetaMedia({ phoneNumberId, accessToken, to, type, medi
     type,
     payload: {
       [type]: mediaPayload,
+    },
+  });
+}
+
+/**
+ * Send Location Message
+ */
+export async function sendMetaLocation({ phoneNumberId, accessToken, to, latitude, longitude, name, address }) {
+  return sendMetaWhatsAppMessage({
+    phoneNumberId,
+    accessToken,
+    to,
+    type: 'location',
+    payload: {
+      location: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        name: name || 'Location',
+        address: address || '',
+      },
+    },
+  });
+}
+
+/**
+ * Send Contact Card Message
+ */
+export async function sendMetaContactCard({ phoneNumberId, accessToken, to, contactName, contactPhone }) {
+  return sendMetaWhatsAppMessage({
+    phoneNumberId,
+    accessToken,
+    to,
+    type: 'contacts',
+    payload: {
+      contacts: [
+        {
+          name: {
+            formatted_name: contactName,
+            first_name: contactName,
+          },
+          phones: [
+            {
+              phone: contactPhone,
+              type: 'CELL',
+            },
+          ],
+        },
+      ],
     },
   });
 }

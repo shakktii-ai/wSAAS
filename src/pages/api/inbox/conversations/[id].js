@@ -1,14 +1,17 @@
-import { getConversationThread, updateStatus } from '@/controllers/inboxController';
+import { getConversationThread, updateStatus, deleteConversation } from '@/controllers/inboxController';
 import { withAuth } from '@/lib/authMiddleware';
 
 async function handler(req, res) {
   if (req.method === 'GET') {
     return getConversationThread(req, res);
   }
-  if (req.method === 'PUT') {
+  if (req.method === 'PUT' || req.method === 'PATCH') {
     return updateStatus(req, res);
   }
-  res.setHeader('Allow', ['GET', 'PUT']);
+  if (req.method === 'DELETE') {
+    return deleteConversation(req, res);
+  }
+  res.setHeader('Allow', ['GET', 'PUT', 'PATCH', 'DELETE']);
   return res.status(405).json({ success: false, message: `Method ${req.method} Not Allowed` });
 }
 

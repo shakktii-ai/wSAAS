@@ -1,5 +1,6 @@
 import connectDB from '@/lib/db';
 import Conversation from '@/models/Conversation';
+import Contact from '@/models/Contact';
 import Message from '@/models/Message';
 import User from '@/models/User';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -7,7 +8,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 export const getConversations = async (req, res) => {
   try {
     await connectDB();
-    const { status = 'all', search, agentId } = req.query;
+    const { status = 'all', search, agentId, page = 1, limit = 50 } = req.query;
     const companyId = req.company._id;
 
     const query = { companyId };
@@ -33,12 +34,26 @@ export const getConversations = async (req, res) => {
       ];
     }
 
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const conversations = await Conversation.find(query)
       .populate('assignedAgent', 'name email avatar role')
       .populate('assignedAgentId', 'name email avatar role')
-      .sort({ isPinned: -1, lastMessageAt: -1 });
+      .sort({ isPinned: -1, lastMessageAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    return successResponse(res, conversations);
+    const total = await Conversation.countDocuments(query);
+
+    return successResponse(res, {
+      conversations,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    });
   } catch (error) {
     console.error('Get Conversations Error:', error);
     return errorResponse(res, 'Failed to fetch conversations', 500);
@@ -65,11 +80,38 @@ export const getConversationThread = async (req, res) => {
       await conversation.save();
     }
 
+    // Fetch associated Contact profile details
+    const contact = await Contact.findOne({ companyId, waId: conversation.waId || conversation.customerPhone });
+    const mediaCount = await Message.countDocuments({
+      conversationId: id,
+      companyId,
+      messageType: { $in: ['image', 'video', 'document', 'audio', 'sticker'] },
+    });
+    const conversationCount = await Conversation.countDocuments({
+      companyId,
+      $or: [{ waId: conversation.waId }, { customerPhone: conversation.customerPhone }],
+    });
+
     const messages = await Message.find({ conversationId: id, companyId })
       .sort({ createdAt: 1 });
 
     return successResponse(res, {
       conversation,
+      contact: contact
+        ? {
+            ...contact.toObject(),
+            mediaCount,
+            conversationCount,
+          }
+        : {
+            name: conversation.customerName,
+            waId: conversation.waId || conversation.customerPhone,
+            phone: conversation.customerPhone,
+            lastSeen: conversation.updatedAt,
+            firstMessageAt: conversation.createdAt,
+            mediaCount,
+            conversationCount,
+          },
       messages,
     });
   } catch (error) {
@@ -173,5 +215,24 @@ export const updateStatus = async (req, res) => {
     return successResponse(res, conversation, `Conversation marked as ${status}`);
   } catch (error) {
     return errorResponse(res, 'Failed to update conversation status', 500);
+  }
+};
+
+export const deleteConversation = async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.query;
+    const companyId = req.company._id;
+
+    const conversation = await Conversation.findOneAndDelete({ _id: id, companyId });
+    if (!conversation) {
+      return errorResponse(res, 'Conversation not found', 404);
+    }
+
+    await Message.deleteMany({ conversationId: id, companyId });
+
+    return successResponse(res, null, 'Conversation deleted successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to delete conversation', 500);
   }
 };

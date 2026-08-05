@@ -1,6 +1,7 @@
 import connectDB from '@/lib/db';
 import Company from '@/models/Company';
 import Conversation from '@/models/Conversation';
+import Contact from '@/models/Contact';
 import Message from '@/models/Message';
 import WebhookLog from '@/models/WebhookLog';
 
@@ -28,7 +29,7 @@ export const verifyWebhook = async (req, res) => {
 };
 
 /**
- * Inbound Webhook Event Handler (POST) - Module 3
+ * Inbound Webhook Event Handler (POST) - Phase 6
  */
 export const handleWebhookEvent = async (req, res) => {
   try {
@@ -58,7 +59,7 @@ export const handleWebhookEvent = async (req, res) => {
       company = await Company.findOne({ status: 'active' });
     }
 
-    // Process Message Delivery/Read Status Updates
+    // Process Message Delivery/Read Status Updates (Sent, Delivered, Read, Failed)
     if (change.statuses && change.statuses.length > 0) {
       for (const statusObj of change.statuses) {
         const metaMessageId = statusObj.id;
@@ -89,11 +90,11 @@ export const handleWebhookEvent = async (req, res) => {
     // Process Incoming Messages
     if (change.messages && change.messages.length > 0) {
       const incomingMsg = change.messages[0];
-      const contact = change.contacts?.[0];
+      const contactObj = change.contacts?.[0];
 
-      const waId = contact?.wa_id || incomingMsg.from;
+      const waId = contactObj?.wa_id || incomingMsg.from;
       const customerPhone = incomingMsg.from || waId;
-      const customerName = contact?.profile?.name || waId;
+      const customerName = contactObj?.profile?.name || waId;
       const metaMessageId = incomingMsg.id;
       const messageType = incomingMsg.type || 'text';
 
@@ -109,7 +110,25 @@ export const handleWebhookEvent = async (req, res) => {
         return;
       }
 
-      // Find existing conversation using waId or customerPhone
+      // Auto-create Contact if does not exist
+      let contact = await Contact.findOne({ companyId: company._id, waId });
+      if (!contact) {
+        contact = await Contact.create({
+          companyId: company._id,
+          waId,
+          phone: customerPhone,
+          name: customerName,
+          lastSeen: new Date(),
+          firstMessageAt: new Date(),
+          conversationCount: 1,
+        });
+      } else {
+        contact.lastSeen = new Date();
+        if (customerName && contact.name !== customerName) contact.name = customerName;
+        await contact.save();
+      }
+
+      // Auto-create Conversation if does not exist
       let conversation = await Conversation.findOne({
         companyId: company._id,
         $or: [{ waId }, { customerPhone }],
@@ -134,6 +153,8 @@ export const handleWebhookEvent = async (req, res) => {
       let mediaUrl = '';
       let mediaCaption = '';
       let filename = '';
+      let locationData = null;
+      let contactCardData = null;
 
       switch (messageType) {
         case 'text':
@@ -144,10 +165,36 @@ export const handleWebhookEvent = async (req, res) => {
         case 'video':
         case 'document':
         case 'audio':
+        case 'sticker':
           mediaUrl = incomingMsg[messageType]?.link || incomingMsg[messageType]?.id || '';
           mediaCaption = incomingMsg[messageType]?.caption || '';
           filename = incomingMsg[messageType]?.filename || '';
           messageBody = mediaCaption || `[Inbound ${messageType.toUpperCase()}]`;
+          if (contact) contact.mediaCount = (contact.mediaCount || 0) + 1;
+          break;
+
+        case 'location':
+          locationData = {
+            latitude: incomingMsg.location?.latitude,
+            longitude: incomingMsg.location?.longitude,
+            name: incomingMsg.location?.name || 'Shared Location',
+            address: incomingMsg.location?.address || '',
+          };
+          messageBody = `📍 Location: ${locationData.name || locationData.address || `${locationData.latitude}, ${locationData.longitude}`}`;
+          break;
+
+        case 'contacts':
+          if (incomingMsg.contacts?.[0]) {
+            const c = incomingMsg.contacts[0];
+            contactCardData = {
+              name: c.name?.formatted_name || c.name?.first_name || 'Shared Contact',
+              phone: c.phones?.[0]?.phone || '',
+              waId: c.phones?.[0]?.wa_id || '',
+            };
+            messageBody = `👤 Contact Card: ${contactCardData.name} (${contactCardData.phone})`;
+          } else {
+            messageBody = '[Contact Card]';
+          }
           break;
 
         case 'button':
@@ -168,7 +215,7 @@ export const handleWebhookEvent = async (req, res) => {
           messageBody = `[${messageType.toUpperCase()} Message]`;
       }
 
-      // Save incoming message (Check duplicates by metaMessageId)
+      // Save incoming message (Check duplicate by metaMessageId)
       const existingMessage = await Message.findOne({
         $or: [{ metaMessageId }, { wamid: metaMessageId }],
       });
@@ -192,6 +239,8 @@ export const handleWebhookEvent = async (req, res) => {
           mediaUrl,
           mediaCaption,
           filename,
+          location: locationData,
+          contactCard: contactCardData,
           deliveryStatus: 'delivered',
           status: 'delivered',
           timestamp: new Date(),
