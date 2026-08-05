@@ -1,11 +1,11 @@
-import { getAnalytics } from '@/controllers/analyticsController';
+import { exportReport } from '@/controllers/analyticsController';
 import { withAuth } from '@/lib/authMiddleware';
 
 async function handler(req, res) {
-  if (req.method === 'GET') {
-    return getAnalytics(req, res);
+  if (req.method === 'POST') {
+    return exportReport(req, res);
   }
-  res.setHeader('Allow', ['GET']);
+  res.setHeader('Allow', ['POST']);
   return res.status(405).json({ success: false, message: `Method ${req.method} Not Allowed` });
 }
 
