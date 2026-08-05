@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/syncchat
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    depends_on:
+      - redis
+      - mongo
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  mongo:
+    image: mongo:6-alpine
+    ports:
+      - "27017:27017"
+    restart: always
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run dev
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/syncchat
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - mongo

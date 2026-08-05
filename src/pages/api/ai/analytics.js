@@ -1,11 +1,11 @@
-import { generateRAGResponse } from '@/controllers/aiStudioController';
+import { getAIAnalytics } from '@/controllers/aiStudioController';
 import { withAuth } from '@/lib/authMiddleware';
 
 async function handler(req, res) {
-  if (req.method === 'POST') {
-    return generateRAGResponse(req, res);
+  if (req.method === 'GET') {
+    return getAIAnalytics(req, res);
   }
-  res.setHeader('Allow', ['POST']);
+  res.setHeader('Allow', ['GET']);
   return res.status(405).json({ success: false, message: `Method ${req.method} Not Allowed` });
 }
 
