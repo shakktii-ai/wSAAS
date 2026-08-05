@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Company',
       index: true,
-      default: null, // null for cross-tenant Super Admin
+      default: null,
     },
     name: {
       type: String,
@@ -29,6 +29,44 @@ const UserSchema = new mongoose.Schema(
     avatar: {
       type: String,
       default: '',
+    },
+    department: {
+      type: String,
+      default: 'Customer Support',
+    },
+    designation: {
+      type: String,
+      default: 'Support Agent',
+    },
+    presence: {
+      type: String,
+      enum: ['online', 'offline', 'away', 'busy'],
+      default: 'online',
+      index: true,
+    },
+    lastSeen: {
+      type: Date,
+      default: Date.now,
+    },
+    activeChatsCount: {
+      type: Number,
+      default: 0,
+    },
+    totalChatsCount: {
+      type: Number,
+      default: 0,
+    },
+    closedChatsCount: {
+      type: Number,
+      default: 0,
+    },
+    avgResponseTimeSeconds: {
+      type: Number,
+      default: 120, // 2 mins default
+    },
+    performanceScore: {
+      type: Number,
+      default: 95, // %
     },
     role: {
       type: String,
@@ -75,7 +113,6 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// Encrypt password using bcrypt
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password') || !this.password) {
     return next();
@@ -85,7 +122,6 @@ UserSchema.pre('save', async function (next) {
   next();
 });
 
-// Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
