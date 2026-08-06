@@ -1,11 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
-import { MessageSquare, ShieldCheck, Lock, FileText, Globe, ExternalLink } from 'lucide-react';
+import { MessageSquare, ShieldCheck } from 'lucide-react';
+import COMPANY from '@/config/company';
 
 export default function LegalLayout({ children, title, description }) {
-  const fullTitle = `${title} | SyncChat Enterprise SaaS`;
-  const metaDesc = description || 'SyncChat Legal, Compliance, Security, and Meta App Review Trust Center.';
+  const fullTitle = `${title} | ${COMPANY.name} Enterprise SaaS`;
+  const metaDesc = description || `${COMPANY.name} Legal, Compliance, Security, and Meta App Review Trust Center.`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-emerald-500 selection:text-white">
@@ -25,7 +26,7 @@ export default function LegalLayout({ children, title, description }) {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/20">
               <MessageSquare className="w-5 h-5 fill-current" />
             </div>
-            SyncChat <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Legal & Trust</span>
+            {COMPANY.name} <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Legal & Trust</span>
           </Link>
 
           <div className="flex items-center gap-4 text-xs font-semibold">
@@ -70,7 +71,7 @@ export default function LegalLayout({ children, title, description }) {
             <div className="space-y-2">
               <p className="font-bold text-white uppercase text-[11px] tracking-wider">Company</p>
               <ul className="space-y-1.5">
-                <li><Link href="/about" className="hover:text-emerald-400">About SyncChat</Link></li>
+                <li><Link href="/about" className="hover:text-emerald-400">About {COMPANY.name}</Link></li>
                 <li><Link href="/contact" className="hover:text-emerald-400">Contact Us</Link></li>
                 <li><Link href="/dashboard" className="hover:text-emerald-400">App Dashboard</Link></li>
               </ul>
@@ -79,13 +80,13 @@ export default function LegalLayout({ children, title, description }) {
             <div className="space-y-2">
               <p className="font-bold text-white uppercase text-[11px] tracking-wider">Meta Compliance</p>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                SyncChat is an official Meta Cloud API Partner Platform. Compliant with Meta Developer Terms & Data Protection Guidelines.
+                {COMPANY.name} is an official Meta Cloud API Partner Platform. Compliant with Meta Developer Terms & Data Protection Guidelines.
               </p>
             </div>
           </div>
 
           <div className="pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-            <p>© {new Date().getFullYear()} SyncChat Technologies Inc. All rights reserved.</p>
+            <p>{COMPANY.copyright}</p>
             <p className="flex items-center gap-1 font-mono text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" /> 100% GDPR & Meta App Review Verified
             </p>

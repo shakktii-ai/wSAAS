@@ -1,27 +1,24 @@
 import React from 'react';
 import LegalLayout from '@/components/layout/LegalLayout';
-import { ShieldCheck, CheckCircle2, Server, Activity } from 'lucide-react';
+import COMPANY from '@/config/company';
 
 export default function TrustCenter() {
   return (
-    <LegalLayout title="Trust Center" description="SyncChat Platform System Status, Uptime Metrics, and Subprocessors Transparency.">
+    <LegalLayout title="Trust Center" description={`${COMPANY.name} Platform System Status, Uptime Metrics, and Subprocessors Transparency.`}>
       <div className="space-y-6">
         <div>
           <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
-            System Uptime & Trust
+            System Uptime &amp; Trust
           </span>
-          <h1 className="text-3xl font-extrabold text-white mt-3 tracking-tight">Trust Center & Platform Status</h1>
+          <h1 className="text-3xl font-extrabold text-white mt-3 tracking-tight">Trust Center &amp; Platform Status</h1>
           <p className="text-xs text-slate-400 mt-1">Realtime system health metrics, uptime transparency, and subprocessors disclosures.</p>
         </div>
 
         {/* Live Status Header */}
         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-            <div>
-              <p className="font-bold text-white text-sm">All Systems Operational</p>
-              <p className="text-xs text-slate-400">Meta Cloud API, Realtime WebSockets, Database & AI Studio operational</p>
-            </div>
+          <div>
+            <p className="font-bold text-white text-sm">All Systems Operational</p>
+            <p className="text-xs text-slate-400">Meta Cloud API, Realtime WebSockets, Database &amp; AI Studio operational</p>
           </div>
           <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/20 px-3 py-1 rounded-full">
             99.98% SLA
@@ -53,7 +50,7 @@ export default function TrustCenter() {
                   </tr>
                   <tr>
                     <td className="py-2 text-white font-bold">Redis Inc.</td>
-                    <td className="py-2">In-Memory Cache & Session Storage</td>
+                    <td className="py-2">In-Memory Cache &amp; Session Storage</td>
                     <td className="py-2">AWS US-East</td>
                   </tr>
                   <tr>

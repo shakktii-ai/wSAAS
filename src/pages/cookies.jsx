@@ -1,9 +1,10 @@
 import React from 'react';
 import LegalLayout from '@/components/layout/LegalLayout';
+import COMPANY from '@/config/company';
 
 export default function CookiePolicy() {
   return (
-    <LegalLayout title="Cookie Policy" description="SyncChat Cookie Policy explaining essential session and analytics cookies.">
+    <LegalLayout title="Cookie Policy" description={`${COMPANY.name} Cookie Policy explaining essential session and analytics cookies.`}>
       <div className="space-y-6">
         <div>
           <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
@@ -17,7 +18,7 @@ export default function CookiePolicy() {
           <section className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">1. What Are Cookies</h2>
             <p>
-              Cookies are small text files stored on your browser to maintain active login sessions, security tokens, and user preferences across dashboard sessions.
+              Cookies are small text files stored on your browser when visiting {COMPANY.website} to maintain active login sessions, security tokens, and user preferences across dashboard sessions.
             </p>
           </section>
 

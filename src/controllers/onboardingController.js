@@ -3,6 +3,7 @@ import Company from '@/models/Company';
 import WhatsAppTemplate from '@/models/WhatsAppTemplate';
 import { sendMetaText } from '@/lib/metaWhatsAppService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import COMPANY from '@/config/company';
 
 /**
  * GET /api/onboarding/status - Setup Wizard Step Progress
@@ -17,7 +18,7 @@ export const getOnboardingStatus = async (req, res) => {
     const isWebhookVerified = company.webhookVerified || true;
 
     const steps = [
-      { id: 1, title: 'Welcome to SyncChat', completed: true },
+      { id: 1, title: `Welcome to ${COMPANY.name}`, completed: true },
       { id: 2, title: 'Company Profile', completed: !!company.name },
       { id: 3, title: 'Team Workspace Setup', completed: true },
       { id: 4, title: 'Connect WhatsApp Business', completed: isConnected },
@@ -95,7 +96,7 @@ export const sendTestMessage = async (req, res) => {
       return errorResponse(res, 'WhatsApp Business Account is not connected', 400);
     }
 
-    const testMessageText = `🎉 Welcome to SyncChat! Your WhatsApp Cloud API connection has been verified successfully. Your enterprise account is now LIVE.`;
+    const testMessageText = `🎉 Welcome to ${COMPANY.name}! Your WhatsApp Cloud API connection has been verified successfully. Your enterprise account is now LIVE.`;
 
     let metaResult;
     try {
@@ -129,7 +130,7 @@ export const verifyWebhook = async (req, res) => {
  */
 export const getMetaAppReviewStatus = async (req, res) => {
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://syncchat-saas.com';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || COMPANY.website;
 
     const reviewData = {
       appMode: 'LIVE',

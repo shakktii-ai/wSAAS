@@ -1,9 +1,10 @@
 import React from 'react';
 import LegalLayout from '@/components/layout/LegalLayout';
+import COMPANY from '@/config/company';
 
 export default function TermsOfService() {
   return (
-    <LegalLayout title="Terms of Service" description="SyncChat Terms of Service and WhatsApp Business API usage guidelines.">
+    <LegalLayout title="Terms of Service" description={`${COMPANY.name} Terms of Service and WhatsApp Business API usage guidelines.`}>
       <div className="space-y-6">
         <div>
           <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
@@ -17,7 +18,7 @@ export default function TermsOfService() {
           <section className="space-y-2 p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">1. Acceptance of Terms</h2>
             <p>
-              By accessing or creating an account on SyncChat (&quot;Service&quot;), you agree to be bound by these Terms of Service. If you represent a company, you warrant that you have authority to bind your company to these terms.
+              By accessing or creating an account on {COMPANY.name} (&quot;Service&quot;, {COMPANY.website}), you agree to be bound by these Terms of Service. If you represent a company, you warrant that you have authority to bind your company to these terms.
             </p>
           </section>
 
@@ -31,14 +32,14 @@ export default function TermsOfService() {
           <section className="space-y-2 p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">3. Subscription & Billing</h2>
             <p>
-              SyncChat offers subscription plans billed monthly or annually. Subscriptions automatically renew unless cancelled 24 hours prior to the billing date. Meta Cloud API conversation fees are billed based on Meta Business rates.
+              {COMPANY.name} offers subscription plans billed monthly or annually. Subscriptions automatically renew unless cancelled 24 hours prior to the billing date. Meta Cloud API conversation fees are billed based on Meta Business rates.
             </p>
           </section>
 
           <section className="space-y-2 p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">4. Service Availability & SLA</h2>
             <p>
-              We strive for 99.9% platform availability. Scheduled maintenance is announced in advance. We are not liable for outages caused by Meta Cloud API infrastructure or third-party telecommunication providers.
+              We strive for 99.9% platform availability. Scheduled maintenance is announced in advance. We are not liable for outages caused by Meta Cloud API infrastructure or third-party telecommunication providers. Contact support at <code>{COMPANY.supportEmail}</code>.
             </p>
           </section>
         </div>
