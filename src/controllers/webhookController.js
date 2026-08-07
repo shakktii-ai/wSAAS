@@ -4,6 +4,7 @@ import Conversation from '@/models/Conversation';
 import Contact from '@/models/Contact';
 import Message from '@/models/Message';
 import WebhookLog from '@/models/WebhookLog';
+import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 
 /**
  * Webhook Verification Handler (GET)
@@ -252,6 +253,18 @@ export const handleWebhookEvent = async (req, res) => {
         conversation.lastMessageAt = new Date();
         conversation.unreadCount = (conversation.unreadCount || 0) + 1;
         await conversation.save();
+
+        // ─── LIVE CHATBOT ENGINE TRIGGER ───────────────────────────────
+        // Fire-and-forget: match published BotFlow triggers and execute
+        // asynchronously. Webhook has already returned HTTP 200.
+        triggerChatbotEngine({
+          company,
+          conversation,
+          contact,
+          incomingText: messageBody,
+          messageType,
+        }).catch((err) => console.error('[Webhook] ChatbotEngine trigger error:', err.message));
+        // ────────────────────────────────────────────────────────────────
       }
 
       await WebhookLog.create({
