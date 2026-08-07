@@ -5,6 +5,7 @@ import Contact from '@/models/Contact';
 import Message from '@/models/Message';
 import WebhookLog from '@/models/WebhookLog';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
+import { triggerAutomationEngine } from '@/lib/automationEngine';
 
 /**
  * Webhook Verification Handler (GET)
@@ -264,6 +265,19 @@ export const handleWebhookEvent = async (req, res) => {
           incomingText: messageBody,
           messageType,
         }).catch((err) => console.error('[Webhook] ChatbotEngine trigger error:', err.message));
+        // ────────────────────────────────────────────────────────────────
+
+        // ─── LIVE AUTOMATION ENGINE TRIGGER ───────────────────────────
+        // Fire-and-forget: match published AutomationFlow workflows and
+        // execute node-by-node with full BullMQ + Socket.IO integration.
+        triggerAutomationEngine({
+          company,
+          conversation,
+          contact,
+          incomingText: messageBody,
+          messageType,
+          wamid: metaMessageId,
+        }).catch((err) => console.error('[Webhook] AutomationEngine trigger error:', err.message));
         // ────────────────────────────────────────────────────────────────
       }
 
