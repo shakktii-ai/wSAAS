@@ -200,3 +200,29 @@ export async function createMetaTemplate({ wabaId, accessToken, name, category, 
     throw new Error(errObj.message || 'Failed to create template on Meta Cloud API');
   }
 }
+
+/**
+ * Delete a WABA Message Template from Meta Graph API
+ */
+export async function deleteMetaTemplate({ wabaId, accessToken, templateName }) {
+  if (!wabaId || !accessToken) {
+    throw new Error('WABA ID or Access Token missing');
+  }
+
+  const endpoint = `${GRAPH_URL}/${wabaId}/message_templates?name=${encodeURIComponent(templateName)}`;
+
+  try {
+    const response = await axios.delete(endpoint, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    const errObj = error.response?.data?.error || { message: error.message };
+    console.error('Meta Delete Template Error:', errObj);
+    throw new Error(errObj.message || 'Failed to delete template from Meta Cloud API');
+  }
+}
+

@@ -12,6 +12,10 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    metaTemplateId: {
+      type: String,
+      default: '',
+    },
     name: {
       type: String,
       required: true,
@@ -28,13 +32,69 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['APPROVED', 'PENDING', 'REJECTED', 'PAUSED'],
-      default: 'APPROVED',
+      enum: ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DISABLED'],
+      default: 'DRAFT',
       index: true,
+    },
+    headerType: {
+      type: String,
+      enum: ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'],
+      default: 'NONE',
+    },
+    headerText: {
+      type: String,
+      default: '',
+    },
+    headerMediaUrl: {
+      type: String,
+      default: '',
+    },
+    bodyText: {
+      type: String,
+      default: '',
+    },
+    footerText: {
+      type: String,
+      default: '',
+    },
+    buttons: {
+      type: Array,
+      default: [],
+    },
+    variables: {
+      type: Array,
+      default: [],
     },
     components: {
       type: Array,
       default: [],
+    },
+    rejection: {
+      reason: { type: String, default: '' },
+      category: { type: String, default: '' },
+      suggestedFix: { type: String, default: '' },
+    },
+    version: {
+      type: Number,
+      default: 1,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    submittedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
     },
     syncedAt: {
       type: Date,
@@ -49,3 +109,4 @@ const WhatsAppTemplateSchema = new mongoose.Schema(
 WhatsAppTemplateSchema.index({ companyId: 1, name: 1, language: 1 }, { unique: true });
 
 export default mongoose.models.WhatsAppTemplate || mongoose.model('WhatsAppTemplate', WhatsAppTemplateSchema);
+

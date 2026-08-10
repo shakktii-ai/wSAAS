@@ -17,6 +17,7 @@ import {
   Zap,
   CreditCard,
   ShieldCheck,
+  FileText,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -29,6 +30,7 @@ export default function Sidebar() {
     { label: 'Shared Inbox', href: '/dashboard/inbox', icon: MessageCircle },
     { label: 'Contacts', href: '/dashboard/contacts', icon: Users },
     { label: 'Broadcasts', href: '/dashboard/broadcasts', icon: Send },
+    { label: 'Templates', href: '/dashboard/templates', icon: FileText },
     { label: 'Chatbot Builder', href: '/dashboard/chatbot', icon: Bot },
     { label: 'Automations', href: '/dashboard/automations', icon: Zap },
     { label: 'AI Assistant Studio', href: '/dashboard/ai', icon: Sparkles },

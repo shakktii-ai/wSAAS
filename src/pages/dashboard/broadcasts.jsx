@@ -61,11 +61,12 @@ export default function BroadcastsManager() {
 
   const fetchTemplates = async () => {
     try {
-      const res = await api.get('/whatsapp/templates');
+      const res = await api.get('/templates?status=APPROVED');
       if (res.success && res.data) {
-        setTemplates(res.data);
-        if (res.data.length > 0) {
-          setTemplateName(res.data[0].name);
+        const approvedOnly = res.data.filter((t) => t.status === 'APPROVED');
+        setTemplates(approvedOnly);
+        if (approvedOnly.length > 0) {
+          setTemplateName(approvedOnly[0].name);
         }
       }
     } catch (err) {
