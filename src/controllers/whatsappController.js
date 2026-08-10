@@ -10,6 +10,7 @@ import {
   sendMetaContactCard,
   sendMetaTemplate,
 } from '@/lib/metaWhatsAppService';
+import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 export const sendMessage = async (req, res) => {
@@ -153,13 +154,12 @@ export const sendMessage = async (req, res) => {
 
     const wamid = metaResult?.messages?.[0]?.id || `wamid.out.${Date.now()}`;
 
-    // Store outbound message in MongoDB
-    const newMessage = await Message.create({
+    // Store outbound message via centralized saveOutboundMessage service
+    const newMessage = await saveOutboundMessage({
       companyId: company._id,
       conversationId: conversation._id,
-      metaMessageId: wamid,
-      wamid,
-      direction: 'outbound',
+      contactId: contact._id,
+      waId: cleanPhone,
       senderType: 'agent',
       sender: {
         id: req.user._id,
@@ -167,8 +167,6 @@ export const sendMessage = async (req, res) => {
         type: 'user',
       },
       messageType: type,
-      type: type,
-      messageBody,
       body: messageBody,
       mediaUrl: mediaUrl || '',
       mediaCaption: mediaCaption || '',
@@ -176,16 +174,10 @@ export const sendMessage = async (req, res) => {
       location: locationData,
       contactCard: contactCardData,
       templateName: templateName || '',
-      deliveryStatus: 'sent',
+      wamid,
+      metaMessageId: wamid,
       status: 'sent',
-      timestamp: new Date(),
     });
-
-    // Update Conversation Last Message
-    conversation.lastMessage = messageBody;
-    conversation.lastMessageType = type;
-    conversation.lastMessageAt = new Date();
-    await conversation.save();
 
     return successResponse(
       res,

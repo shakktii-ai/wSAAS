@@ -2,6 +2,7 @@ import connectDB from '@/lib/db';
 import Company from '@/models/Company';
 import WhatsAppTemplate from '@/models/WhatsAppTemplate';
 import { sendMetaText } from '@/lib/metaWhatsAppService';
+import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import COMPANY from '@/config/company';
 
@@ -105,6 +106,19 @@ export const sendTestMessage = async (req, res) => {
       console.warn('Test message dispatch simulated fallback:', err.message);
       metaResult = { messages: [{ id: `wamid.test.${Date.now()}` }] };
     }
+
+    const wamid = metaResult?.messages?.[0]?.id || `wamid.test.${Date.now()}`;
+    await saveOutboundMessage({
+      companyId: company._id,
+      waId: targetPhone,
+      senderType: 'agent',
+      sender: { id: req.user._id, name: req.user.name, type: 'user' },
+      messageType: 'text',
+      body: testMessageText,
+      wamid,
+      metaMessageId: wamid,
+      status: 'sent',
+    });
 
     return successResponse(res, metaResult, `Test message sent to +${targetPhone} successfully!`);
   } catch (error) {

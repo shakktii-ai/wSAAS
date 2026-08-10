@@ -23,6 +23,7 @@ import Message from '@/models/Message';
 import Conversation from '@/models/Conversation';
 import Contact from '@/models/Contact';
 import { sendMetaText, sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
 import { queueService } from '@/lib/queueService';
@@ -538,27 +539,6 @@ async function executeHttpNode({ node, contact, conversation }) {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-
-async function saveOutboundMessage({ companyId, conversationId, contactId, wamid, messageType, body, mediaUrl }) {
-  return Message.create({
-    companyId,
-    conversationId,
-    contactId,
-    metaMessageId: wamid,
-    wamid,
-    direction: 'outbound',
-    senderType: 'bot',
-    sender: { name: 'Bot', type: 'bot' },
-    messageType,
-    type: messageType,
-    messageBody: body,
-    body,
-    mediaUrl: mediaUrl || '',
-    deliveryStatus: 'sent',
-    status: 'sent',
-    timestamp: new Date(),
-  });
-}
 
 async function updateConversationLastMessage(conversationId, body, type) {
   return Conversation.findByIdAndUpdate(conversationId, {

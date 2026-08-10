@@ -6,6 +6,7 @@ import Message from '@/models/Message';
 import WebhookLog from '@/models/WebhookLog';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 import { triggerAutomationEngine } from '@/lib/automationEngine';
+import { socketService } from '@/lib/socketService';
 
 /**
  * Webhook Verification Handler (GET)
@@ -67,14 +68,20 @@ export const handleWebhookEvent = async (req, res) => {
         const metaMessageId = statusObj.id;
         const status = statusObj.status; // 'sent', 'delivered', 'read', 'failed'
 
-        await Message.findOneAndUpdate(
+        const updatedMsg = await Message.findOneAndUpdate(
           { $or: [{ metaMessageId }, { wamid: metaMessageId }] },
           {
             deliveryStatus: status,
             status,
             ...(statusObj.errors ? { errorDetails: statusObj.errors } : {}),
-          }
+          },
+          { new: true }
         );
+
+        if (updatedMsg && company) {
+          socketService.broadcastToCompany(company._id.toString(), 'MESSAGE_SENT', updatedMsg);
+          socketService.broadcastToCompany(company._id.toString(), 'NEW_MESSAGE_RECEIVED', updatedMsg);
+        }
       }
 
       if (company) {

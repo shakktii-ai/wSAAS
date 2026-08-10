@@ -5,6 +5,7 @@ import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
 import CampaignRecipient from '@/models/CampaignRecipient';
 import { sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 export const getBroadcasts = async (req, res) => {
@@ -128,16 +129,19 @@ export const executeBroadcast = async (req, res) => {
           });
         }
 
-        await Message.create({
+        await saveOutboundMessage({
           companyId: company._id,
           conversationId: conversation._id,
-          wamid,
-          direction: 'outbound',
-          type: 'template',
+          contactId: contact._id,
+          waId: cleanPhone,
+          senderType: 'system',
+          sender: { id: req.user._id, name: req.user.name, type: 'user' },
+          messageType: 'template',
           body: `[Broadcast Campaign: ${broadcast.name}]`,
           templateName: broadcast.templateName,
+          wamid,
+          metaMessageId: wamid,
           status: 'sent',
-          sender: { id: req.user._id, name: req.user.name, type: 'user' },
         });
 
         await CampaignRecipient.create({
@@ -149,10 +153,6 @@ export const executeBroadcast = async (req, res) => {
           metaMessageId: wamid,
           sentAt: new Date(),
         });
-
-        conversation.lastMessage = `[Campaign: ${broadcast.name}]`;
-        conversation.lastMessageAt = new Date();
-        await conversation.save();
 
         sent++;
       } catch (err) {

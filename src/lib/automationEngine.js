@@ -34,6 +34,7 @@ import Contact from '@/models/Contact';
 import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
 import { sendMetaText, sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
 import { queueService } from '@/lib/queueService';
@@ -658,26 +659,6 @@ async function executeAiReplyNode({ node, flow, phoneNumberId, accessToken, targ
 }
 
 // ─── SHARED HELPERS ───────────────────────────────────────────────────────────
-
-async function saveOutboundMessage({ companyId, conversation, contact, wamid, body, messageType }) {
-  return Message.create({
-    companyId,
-    conversationId: conversation._id,
-    contactId: contact._id,
-    metaMessageId: wamid,
-    wamid,
-    direction: 'outbound',
-    senderType: 'automation',
-    sender: { name: 'Automation', type: 'automation' },
-    messageType,
-    type: messageType,
-    messageBody: body,
-    body,
-    deliveryStatus: 'sent',
-    status: 'sent',
-    timestamp: new Date(),
-  });
-}
 
 async function updateConversationLastMessage(conversationId, body, type) {
   return Conversation.findByIdAndUpdate(conversationId, {
