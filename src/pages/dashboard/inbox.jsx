@@ -118,24 +118,29 @@ export default function SharedInbox() {
     }
   };
 
+  const selectedConvRef = useRef(selectedConversation);
+  useEffect(() => {
+    selectedConvRef.current = selectedConversation;
+  }, [selectedConversation]);
+
   useEffect(() => {
     fetchConversations();
     fetchTeamAgents();
 
-    // SSE / Real-time Live Polling Engine (every 4 seconds)
+    // SSE / Real-time Live Polling Engine (every 3 seconds)
     const interval = setInterval(() => {
       fetchConversations();
-      if (selectedConversation) {
-        api.get(`/inbox/conversations/${selectedConversation._id}`).then((res) => {
+      if (selectedConvRef.current?._id) {
+        api.get(`/inbox/conversations/${selectedConvRef.current._id}`).then((res) => {
           if (res.success && res.data) {
             setMessages(res.data.messages);
           }
         });
       }
-    }, 4000);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [statusFilter, search, selectedConversation?._id]);
+  }, [statusFilter, search]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
