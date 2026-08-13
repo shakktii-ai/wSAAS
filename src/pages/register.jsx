@@ -18,7 +18,7 @@ export default function Register() {
     if (typeof window !== 'undefined' && !window.FB) {
       window.fbAsyncInit = function () {
         window.FB.init({
-          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '2388907868182234',
+          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
           cookie: true,
           xfbml: true,
           version: 'v20.0',
@@ -57,7 +57,7 @@ export default function Register() {
     setError('');
     setLoading(true);
 
-    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '2388907868182234';
+    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
 
     if (typeof window !== 'undefined' && window.FB) {
       window.FB.login(

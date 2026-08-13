@@ -14,6 +14,17 @@ const ConversationSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    phoneNumberId: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
+    wabaId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     customerPhone: {
       type: String,
       required: true,

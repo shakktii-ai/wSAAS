@@ -9,6 +9,7 @@ import {
   sendMetaLocation,
   sendMetaContactCard,
   sendMetaTemplate,
+  resolveWhatsAppCredentials,
 } from '@/lib/metaWhatsAppService';
 import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -19,6 +20,7 @@ export const sendMessage = async (req, res) => {
     const company = req.company;
     const {
       to,
+      conversationId: reqConversationId,
       type = 'text',
       body,
       mediaUrl,
@@ -33,13 +35,6 @@ export const sendMessage = async (req, res) => {
 
     if (!to) {
       return errorResponse(res, 'Recipient phone number (to) is required', 400);
-    }
-
-    const phoneNumberId = company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID;
-    const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
-
-    if (!phoneNumberId || !accessToken) {
-      return errorResponse(res, 'WhatsApp Business Account credentials not configured', 400);
     }
 
     const cleanPhone = to.replace(/[^0-9]/g, '');
@@ -58,10 +53,30 @@ export const sendMessage = async (req, res) => {
     }
 
     // Auto-create or find Conversation
-    let conversation = await Conversation.findOne({
-      companyId: company._id,
-      $or: [{ waId: cleanPhone }, { customerPhone: cleanPhone }],
+    let conversation = null;
+    if (reqConversationId) {
+      conversation = await Conversation.findOne({ _id: reqConversationId, companyId: company._id });
+    }
+    if (!conversation) {
+      conversation = await Conversation.findOne({
+        companyId: company._id,
+        $or: [{ waId: cleanPhone }, { customerPhone: cleanPhone }],
+      });
+    }
+
+    // Resolve WhatsApp credentials with priority to Conversation's connected phoneNumberId
+    const { resolvedPhoneNumberId, resolvedWabaId, resolvedAccessToken } = resolveWhatsAppCredentials({
+      company,
+      conversation,
     });
+
+    const phoneNumberId = resolvedPhoneNumberId;
+    const accessToken = resolvedAccessToken;
+    const wabaId = resolvedWabaId;
+
+    if (!phoneNumberId || !accessToken) {
+      return errorResponse(res, 'WhatsApp Business Account credentials not configured', 400);
+    }
 
     if (!conversation) {
       conversation = await Conversation.create({
@@ -69,8 +84,14 @@ export const sendMessage = async (req, res) => {
         waId: cleanPhone,
         customerPhone: cleanPhone,
         customerName: contact.name || cleanPhone,
+        phoneNumberId,
+        wabaId,
         status: 'open',
       });
+    } else if (!conversation.phoneNumberId) {
+      conversation.phoneNumberId = phoneNumberId;
+      if (wabaId && !conversation.wabaId) conversation.wabaId = wabaId;
+      await conversation.save();
     }
 
     let metaResult = null;
@@ -78,11 +99,17 @@ export const sendMessage = async (req, res) => {
     let locationData = null;
     let contactCardData = null;
 
+    const logCtx = {
+      companyId: company._id.toString(),
+      conversationId: conversation._id.toString(),
+      wabaId,
+    };
+
     // Execute Meta Cloud API call based on message type
     switch (type) {
       case 'text':
         if (!body) return errorResponse(res, 'Message text body is required', 400);
-        metaResult = await sendMetaText({ phoneNumberId, accessToken, to: cleanPhone, text: body });
+        metaResult = await sendMetaText({ phoneNumberId, accessToken, to: cleanPhone, text: body, ...logCtx });
         break;
 
       case 'image':
@@ -99,6 +126,7 @@ export const sendMessage = async (req, res) => {
           mediaUrl,
           caption: mediaCaption,
           filename,
+          ...logCtx,
         });
         messageBody = mediaCaption || `[${type.toUpperCase()} Attachment]`;
         break;
@@ -115,6 +143,7 @@ export const sendMessage = async (req, res) => {
           longitude: location.longitude,
           name: location.name,
           address: location.address,
+          ...logCtx,
         });
         locationData = location;
         messageBody = `📍 Location: ${location.name || `${location.latitude}, ${location.longitude}`}`;
@@ -130,6 +159,7 @@ export const sendMessage = async (req, res) => {
           to: cleanPhone,
           contactName: contactCard.name,
           contactPhone: contactCard.phone,
+          ...logCtx,
         });
         contactCardData = contactCard;
         messageBody = `👤 Contact Card: ${contactCard.name} (${contactCard.phone})`;
@@ -144,6 +174,7 @@ export const sendMessage = async (req, res) => {
           templateName,
           languageCode: languageCode || 'en_US',
           components: components || [],
+          ...logCtx,
         });
         messageBody = `[Template: ${templateName}]`;
         break;

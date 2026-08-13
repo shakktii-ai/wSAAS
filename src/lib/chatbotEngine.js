@@ -22,7 +22,7 @@ import BotExecutionLog from '@/models/BotExecutionLog';
 import Message from '@/models/Message';
 import Conversation from '@/models/Conversation';
 import Contact from '@/models/Contact';
-import { sendMetaText, sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { sendMetaText, sendMetaTemplate, resolveWhatsAppCredentials } from '@/lib/metaWhatsAppService';
 import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
@@ -198,8 +198,14 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
     currentNodeId: startNodeId,
   });
 
-  const phoneNumberId = company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID;
-  const accessToken = company.accessToken || company.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+  const { resolvedPhoneNumberId, resolvedWabaId, resolvedAccessToken } = resolveWhatsAppCredentials({
+    company,
+    conversation,
+  });
+
+  const phoneNumberId = resolvedPhoneNumberId;
+  const accessToken = resolvedAccessToken;
+  const wabaId = resolvedWabaId;
   const targetPhone = contact.phone || contact.waId;
 
   let currentNodeId = startNodeId;

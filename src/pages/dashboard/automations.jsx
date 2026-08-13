@@ -128,8 +128,10 @@ export default function VisualAutomationBuilder() {
 
   const handleExecuteTest = async () => {
     if (!selectedFlow) return;
+    const phoneInput = window.prompt('Enter target phone number for test execution:', '15551234567');
+    if (!phoneInput) return;
     try {
-      const res = await api.post(`/automations/${selectedFlow._id}/execute`, { phone: '15556586686' });
+      const res = await api.post(`/automations/${selectedFlow._id}/execute`, { phone: phoneInput });
       if (res.success && res.data) {
         alert('Visual Flow Executed Successfully! Step logs recorded.');
         loadFlowDetails(selectedFlow._id);

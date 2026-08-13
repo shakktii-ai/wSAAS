@@ -4,15 +4,72 @@ const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
 const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 /**
- * Send Outbound WhatsApp Message via Meta Cloud API
+ * Resolves the outbound WhatsApp sender credentials for a given company and conversation context.
+ * Precedence:
+ * 1. Explicit override parameters (overridePhoneId / overrideWabaId)
+ * 2. Conversation-bound phoneNumberId / wabaId (if set when customer messaged Number A)
+ * 3. Company's connected phoneNumberId / wabaId (company.phoneNumberId or company.whatsappConfig.phoneNumberId)
+ * 4. Environment fallback (process.env.META_PHONE_NUMBER_ID / META_WABA_ID)
  */
-export async function sendMetaWhatsAppMessage({ phoneNumberId, accessToken, to, type, payload }) {
+export function resolveWhatsAppCredentials({ company, conversation, overridePhoneId, overrideWabaId } = {}) {
+  const resolvedPhoneNumberId =
+    overridePhoneId ||
+    conversation?.phoneNumberId ||
+    company?.phoneNumberId ||
+    company?.whatsappConfig?.phoneNumberId ||
+    process.env.META_PHONE_NUMBER_ID ||
+    '';
+
+  const resolvedWabaId =
+    overrideWabaId ||
+    conversation?.wabaId ||
+    company?.wabaId ||
+    company?.whatsappConfig?.wabaId ||
+    process.env.META_WABA_ID ||
+    '';
+
+  const resolvedAccessToken =
+    company?.accessToken ||
+    company?.whatsappConfig?.accessToken ||
+    process.env.META_ACCESS_TOKEN ||
+    '';
+
+  return {
+    resolvedPhoneNumberId,
+    resolvedWabaId,
+    resolvedAccessToken,
+  };
+}
+
+/**
+ * Send Outbound WhatsApp Message via Meta Cloud API
+ *
+ * CRITICAL:
+ * - Uses POST /{resolvedPhoneNumberId}/messages
+ * - Logs safe details (companyId, conversationId, resolvedPhoneNumberId, recipientWaId, WABA ID)
+ * - Never logs access tokens or secrets.
+ */
+export async function sendMetaWhatsAppMessage({
+  phoneNumberId,
+  accessToken,
+  to,
+  type,
+  payload,
+  companyId,
+  conversationId,
+  wabaId,
+}) {
   if (!phoneNumberId || !accessToken) {
     throw new Error('Meta WhatsApp credentials missing (Phone Number ID or Access Token)');
   }
 
   const cleanPhone = to.replace(/[^0-9]/g, '');
   const endpoint = `${GRAPH_URL}/${phoneNumberId}/messages`;
+
+  // Safe structured log (Never log access tokens or secrets)
+  console.log(
+    `[Outbound WhatsApp] companyId: ${companyId || 'N/A'} | conversationId: ${conversationId || 'N/A'} | resolvedPhoneNumberId: ${phoneNumberId} | recipientWaId: ${cleanPhone} | WABA ID: ${wabaId || 'N/A'}`
+  );
 
   const requestData = {
     messaging_product: 'whatsapp',
@@ -41,7 +98,7 @@ export async function sendMetaWhatsAppMessage({ phoneNumberId, accessToken, to, 
 /**
  * Send Text Message
  */
-export async function sendMetaText({ phoneNumberId, accessToken, to, text }) {
+export async function sendMetaText({ phoneNumberId, accessToken, to, text, companyId, conversationId, wabaId }) {
   return sendMetaWhatsAppMessage({
     phoneNumberId,
     accessToken,
@@ -50,13 +107,16 @@ export async function sendMetaText({ phoneNumberId, accessToken, to, text }) {
     payload: {
       text: { body: text, preview_url: true },
     },
+    companyId,
+    conversationId,
+    wabaId,
   });
 }
 
 /**
  * Send Media Message (image, video, document, audio, sticker)
  */
-export async function sendMetaMedia({ phoneNumberId, accessToken, to, type, mediaUrl, caption, filename }) {
+export async function sendMetaMedia({ phoneNumberId, accessToken, to, type, mediaUrl, caption, filename, companyId, conversationId, wabaId }) {
   const mediaPayload = { link: mediaUrl };
   if (caption && ['image', 'video', 'document'].includes(type)) {
     mediaPayload.caption = caption;
@@ -73,13 +133,16 @@ export async function sendMetaMedia({ phoneNumberId, accessToken, to, type, medi
     payload: {
       [type]: mediaPayload,
     },
+    companyId,
+    conversationId,
+    wabaId,
   });
 }
 
 /**
  * Send Location Message
  */
-export async function sendMetaLocation({ phoneNumberId, accessToken, to, latitude, longitude, name, address }) {
+export async function sendMetaLocation({ phoneNumberId, accessToken, to, latitude, longitude, name, address, companyId, conversationId, wabaId }) {
   return sendMetaWhatsAppMessage({
     phoneNumberId,
     accessToken,
@@ -93,13 +156,16 @@ export async function sendMetaLocation({ phoneNumberId, accessToken, to, latitud
         address: address || '',
       },
     },
+    companyId,
+    conversationId,
+    wabaId,
   });
 }
 
 /**
  * Send Contact Card Message
  */
-export async function sendMetaContactCard({ phoneNumberId, accessToken, to, contactName, contactPhone }) {
+export async function sendMetaContactCard({ phoneNumberId, accessToken, to, contactName, contactPhone, companyId, conversationId, wabaId }) {
   return sendMetaWhatsAppMessage({
     phoneNumberId,
     accessToken,
@@ -121,13 +187,16 @@ export async function sendMetaContactCard({ phoneNumberId, accessToken, to, cont
         },
       ],
     },
+    companyId,
+    conversationId,
+    wabaId,
   });
 }
 
 /**
  * Send Template Message
  */
-export async function sendMetaTemplate({ phoneNumberId, accessToken, to, templateName, languageCode = 'en_US', components = [] }) {
+export async function sendMetaTemplate({ phoneNumberId, accessToken, to, templateName, languageCode = 'en_US', components = [], companyId, conversationId, wabaId }) {
   return sendMetaWhatsAppMessage({
     phoneNumberId,
     accessToken,
@@ -140,6 +209,9 @@ export async function sendMetaTemplate({ phoneNumberId, accessToken, to, templat
         components,
       },
     },
+    companyId,
+    conversationId,
+    wabaId,
   });
 }
 
@@ -225,4 +297,3 @@ export async function deleteMetaTemplate({ wabaId, accessToken, templateName }) 
     throw new Error(errObj.message || 'Failed to delete template from Meta Cloud API');
   }
 }
-

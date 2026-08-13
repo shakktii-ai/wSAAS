@@ -12,6 +12,8 @@ export async function saveOutboundMessage({
   companyId,
   conversationId,
   contactId,
+  phoneNumberId,
+  wabaId,
   waId,
   phone,
   recipientPhone,
@@ -87,11 +89,16 @@ export async function saveOutboundMessage({
       waId: cleanPhone,
       customerPhone: cleanPhone,
       customerName: contact?.name || cleanPhone,
+      phoneNumberId: phoneNumberId || '',
+      wabaId: wabaId || '',
       status: 'open',
       lastMessage: finalBody,
       lastMessageType: finalMessageType,
       lastMessageAt: new Date(),
     });
+  } else if (conversation && phoneNumberId && !conversation.phoneNumberId) {
+    conversation.phoneNumberId = phoneNumberId;
+    if (wabaId && !conversation.wabaId) conversation.wabaId = wabaId;
   }
 
   const finalConversationId = conversation?._id || conversationId;

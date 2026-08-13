@@ -254,7 +254,7 @@ export default function CompanySettings() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
-                  `https://wa.me/${(company?.whatsappConfig?.displayPhoneNumber || company?.phone || '15556586686').replace(/[^0-9]/g, '')}?text=Hello`
+                  `https://wa.me/${(company?.whatsappConfig?.displayPhoneNumber || company?.displayPhoneNumber || company?.phone || '').replace(/[^0-9]/g, '')}?text=Hello`
                 )}&color=10b981&bgcolor=020617`}
                 alt="WhatsApp QR Code Scanner"
                 className="w-44 h-44 rounded-xl border border-emerald-500/30 p-2 bg-slate-900 shadow-xl shadow-emerald-500/10"
@@ -268,7 +268,7 @@ export default function CompanySettings() {
               <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-xs">
                 <span className="text-[10px] text-slate-500 block uppercase mb-0.5">Deep Link URL:</span>
                 <span className="text-emerald-400 underline break-all">
-                  https://wa.me/{(company?.whatsappConfig?.displayPhoneNumber || company?.phone || '15556586686').replace(/[^0-9]/g, '')}?text=Hello
+                  https://wa.me/{(company?.whatsappConfig?.displayPhoneNumber || company?.displayPhoneNumber || company?.phone || '').replace(/[^0-9]/g, '')}?text=Hello
                 </span>
               </div>
             </div>

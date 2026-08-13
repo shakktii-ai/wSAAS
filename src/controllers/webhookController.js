@@ -56,7 +56,12 @@ export const handleWebhookEvent = async (req, res) => {
     // Find Tenant Company by Phone Number ID or default active company
     let company = null;
     if (phoneNumberId) {
-      company = await Company.findOne({ 'whatsappConfig.phoneNumberId': phoneNumberId });
+      company = await Company.findOne({
+        $or: [
+          { 'whatsappConfig.phoneNumberId': phoneNumberId },
+          { phoneNumberId: phoneNumberId },
+        ],
+      });
     }
     if (!company) {
       company = await Company.findOne({ status: 'active' });
@@ -149,6 +154,8 @@ export const handleWebhookEvent = async (req, res) => {
           waId,
           customerPhone,
           customerName,
+          phoneNumberId: phoneNumberId || company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '',
+          wabaId: company.wabaId || company.whatsappConfig?.wabaId || '',
           status: 'open',
           unreadCount: 0,
         });
@@ -156,6 +163,13 @@ export const handleWebhookEvent = async (req, res) => {
         if (customerName && conversation.customerName !== customerName) {
           conversation.customerName = customerName;
         }
+        if (phoneNumberId && conversation.phoneNumberId !== phoneNumberId) {
+          conversation.phoneNumberId = phoneNumberId;
+        }
+        if (!conversation.wabaId && (company.wabaId || company.whatsappConfig?.wabaId)) {
+          conversation.wabaId = company.wabaId || company.whatsappConfig?.wabaId;
+        }
+        await conversation.save();
       }
 
       let messageBody = '';

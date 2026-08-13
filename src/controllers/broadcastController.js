@@ -4,7 +4,7 @@ import Contact from '@/models/Contact';
 import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
 import CampaignRecipient from '@/models/CampaignRecipient';
-import { sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { sendMetaTemplate, resolveWhatsAppCredentials } from '@/lib/metaWhatsAppService';
 import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
@@ -75,8 +75,13 @@ export const executeBroadcast = async (req, res) => {
     const { id } = req.query;
     const company = req.company;
 
-    const phoneNumberId = company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID;
-    const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+    const { resolvedPhoneNumberId, resolvedWabaId, resolvedAccessToken } = resolveWhatsAppCredentials({
+      company,
+    });
+
+    const phoneNumberId = resolvedPhoneNumberId;
+    const accessToken = resolvedAccessToken;
+    const wabaId = resolvedWabaId;
 
     if (!phoneNumberId || !accessToken) {
       return errorResponse(res, 'WhatsApp Business Account is not connected', 400);
@@ -108,31 +113,43 @@ export const executeBroadcast = async (req, res) => {
       try {
         const cleanPhone = contact.phone.replace(/[^0-9]/g, '');
 
+        // Find/Create conversation first
+        let conversation = await Conversation.findOne({ companyId: company._id, customerPhone: cleanPhone });
+        if (!conversation) {
+          conversation = await Conversation.create({
+            companyId: company._id,
+            waId: cleanPhone,
+            customerPhone: cleanPhone,
+            customerName: contact.name,
+            phoneNumberId,
+            wabaId,
+            status: 'active',
+          });
+        } else if (!conversation.phoneNumberId) {
+          conversation.phoneNumberId = phoneNumberId;
+          if (wabaId && !conversation.wabaId) conversation.wabaId = wabaId;
+          await conversation.save();
+        }
+
         const metaResult = await sendMetaTemplate({
           phoneNumberId,
           accessToken,
           to: cleanPhone,
           templateName: broadcast.templateName,
           languageCode: broadcast.languageCode,
+          companyId: company._id.toString(),
+          conversationId: conversation._id.toString(),
+          wabaId,
         });
 
         const wamid = metaResult?.messages?.[0]?.id || `wamid.bcast.${Date.now()}`;
-
-        // Find/Create conversation
-        let conversation = await Conversation.findOne({ companyId: company._id, customerPhone: cleanPhone });
-        if (!conversation) {
-          conversation = await Conversation.create({
-            companyId: company._id,
-            customerPhone: cleanPhone,
-            customerName: contact.name,
-            status: 'active',
-          });
-        }
 
         await saveOutboundMessage({
           companyId: company._id,
           conversationId: conversation._id,
           contactId: contact._id,
+          phoneNumberId,
+          wabaId,
           waId: cleanPhone,
           senderType: 'system',
           sender: { id: req.user._id, name: req.user.name, type: 'user' },

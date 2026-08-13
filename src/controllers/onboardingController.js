@@ -40,9 +40,9 @@ export const getOnboardingStatus = async (req, res) => {
       completionPercentage,
       isConnected,
       businessName: company.businessName || company.name,
-      displayPhoneNumber: company.displayPhoneNumber || '+1 555-658-6686',
-      wabaId: company.wabaId || process.env.META_WABA_ID || '27142090378802643',
-      phoneNumberId: company.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '1279365541920553',
+      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || company.phone || '',
+      wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '',
+      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
       qualityRating: company.qualityRating || 'GREEN',
       templateCount,
     });
@@ -88,7 +88,10 @@ export const sendTestMessage = async (req, res) => {
     const { phone } = req.body;
     const company = req.company;
 
-    const targetPhone = (phone || req.user.phone || '15556586686').replace(/[^0-9]/g, '');
+    const targetPhone = (phone || req.user?.phone || '').replace(/[^0-9]/g, '');
+    if (!targetPhone) {
+      return errorResponse(res, 'Target phone number is required to send a test message', 400);
+    }
 
     const phoneNumberId = company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID;
     const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;

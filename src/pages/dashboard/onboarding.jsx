@@ -27,7 +27,7 @@ export default function SaaSOnboardingWizard() {
   const [loading, setLoading] = useState(true);
 
   // Test Message State
-  const [testPhone, setTestPhone] = useState('15556586686');
+  const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState('');
 
@@ -57,7 +57,7 @@ export default function SaaSOnboardingWizard() {
     try {
       const res = await api.post('/meta/embedded-signup/start');
       if (res.success && res.data) {
-        const appId = res.data.appId || '2388907868182234';
+        const appId = res.data.appId || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
         window.open(
           `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
             window.location.origin + '/api/meta/exchange-token'
@@ -197,7 +197,7 @@ export default function SaaSOnboardingWizard() {
                   required
                   value={testPhone}
                   onChange={(e) => setTestPhone(e.target.value)}
-                  placeholder="15556586686"
+                  placeholder="e.g. 15551234567"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
                 />
               </div>

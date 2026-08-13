@@ -4,7 +4,7 @@ import AutomationLog from '@/models/AutomationLog';
 import Contact from '@/models/Contact';
 import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
-import { sendMetaText, sendMetaTemplate } from '@/lib/metaWhatsAppService';
+import { sendMetaText, sendMetaTemplate, resolveWhatsAppCredentials } from '@/lib/metaWhatsAppService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 /**
@@ -168,10 +168,14 @@ export const executeFlow = async (req, res) => {
       return errorResponse(res, 'Automation flow not found', 404);
     }
 
-    const cleanPhone = (phone || '15556586686').replace(/[^0-9]/g, '');
+    const cleanPhone = (phone || req.user?.phone || company?.phone || '').replace(/[^0-9]/g, '');
+    if (!cleanPhone) {
+      return errorResponse(res, 'Target phone number is required to execute automation flow', 400);
+    }
 
-    const phoneNumberId = company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID;
-    const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+    const { resolvedPhoneNumberId, resolvedAccessToken } = resolveWhatsAppCredentials({ company });
+    const phoneNumberId = resolvedPhoneNumberId;
+    const accessToken = resolvedAccessToken;
 
     const executedSteps = [];
     const startTime = Date.now();

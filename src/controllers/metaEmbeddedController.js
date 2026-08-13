@@ -5,8 +5,8 @@ import WhatsAppTemplate from '@/models/WhatsAppTemplate';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
-const FACEBOOK_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_CLIENT_ID || '2388907868182234';
-const FACEBOOK_APP_SECRET = process.env.FACEBOOK_CLIENT_SECRET || 'c48af99fea33927af97feddab4be299e';
+const FACEBOOK_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_CLIENT_ID || process.env.META_APP_ID || '';
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_CLIENT_SECRET || process.env.META_APP_SECRET || '';
 
 /**
  * 1. POST /api/meta/embedded-signup/start
@@ -91,8 +91,8 @@ export const exchangeToken = async (req, res) => {
     }
 
     // Query WABA Accounts from Meta Graph API
-    let wabaId = inputWabaId || process.env.META_WABA_ID || '27142090378802643';
-    let phoneNumberId = inputPhoneId || process.env.META_PHONE_NUMBER_ID || '1279365541920553';
+    let wabaId = inputWabaId || process.env.META_WABA_ID || '';
+    let phoneNumberId = inputPhoneId || process.env.META_PHONE_NUMBER_ID || '';
     let displayPhoneNumber = '';
     let businessName = req.company.name || 'WhatsApp Business';
     let qualityRating = 'GREEN';
@@ -129,7 +129,7 @@ export const exchangeToken = async (req, res) => {
     }
 
     if (!displayPhoneNumber) {
-      displayPhoneNumber = '+1 555-658-6686';
+      displayPhoneNumber = req.company?.phone || '';
     }
 
     // Save Connected Meta WABA Credentials to Company Document
@@ -231,9 +231,9 @@ export const getAccount = async (req, res) => {
       isConnected: company.isConnected || company.whatsappConfig?.status === 'CONNECTED',
       connectedAt: company.connectedAt || company.updatedAt,
       businessName: company.businessName || company.name,
-      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || '+1 555-658-6686',
-      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '1279365541920553',
-      wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '27142090378802643',
+      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || company.phone || '',
+      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
+      wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '',
       metaBusinessId: company.metaBusinessId || '',
       qualityRating: company.qualityRating || company.whatsappConfig?.qualityRating || 'GREEN',
       messagingLimit: company.messagingLimit || 'TIER_1K',
@@ -257,7 +257,7 @@ export const getTemplates = async (req, res) => {
     const companyId = req.company._id;
     const company = await Company.findById(companyId);
 
-    const wabaId = company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '27142090378802643';
+    const wabaId = company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '';
     const accessToken = company.accessToken || company.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
 
     // Live Sync from Meta Graph API

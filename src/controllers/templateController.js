@@ -258,8 +258,8 @@ export const createNewTemplate = async (req, res) => {
     let submittedAt = null;
 
     if (submit) {
-      const wabaId = company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
 
       if (!wabaId || !accessToken) {
         return errorResponse(res, 'Meta WABA credentials missing in workspace configuration', 400);
@@ -444,8 +444,8 @@ export const updateTemplate = async (req, res) => {
     existing.updatedBy = user?._id || null;
 
     if (submit) {
-      const wabaId = company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
 
       if (!wabaId || !accessToken) {
         return errorResponse(res, 'Meta WABA credentials missing in workspace configuration', 400);
@@ -587,8 +587,8 @@ export const deleteTemplate = async (req, res) => {
 
     // Try Meta deletion if metaTemplateId or name exists and not DRAFT
     if (template.status !== 'DRAFT' && template.name) {
-      const wabaId = company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
       if (wabaId && accessToken) {
         try {
           await deleteMetaTemplate({ wabaId, accessToken, templateName: template.name });

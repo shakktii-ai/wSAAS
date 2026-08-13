@@ -81,7 +81,10 @@ export const generateWhatsAppQRCode = async (req, res) => {
     const company = req.company;
     const { prefilledText } = req.query;
 
-    const phone = company?.whatsappConfig?.displayPhoneNumber || company?.phone || '15556586686';
+    const phone = company?.whatsappConfig?.displayPhoneNumber || company?.displayPhoneNumber || company?.phone || '';
+    if (!phone) {
+      return errorResponse(res, 'WhatsApp phone number is not configured for company', 400);
+    }
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const message = encodeURIComponent(prefilledText || 'Hello SyncChat Team! I would like to inquire about your services.');
 

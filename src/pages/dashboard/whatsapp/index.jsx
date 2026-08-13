@@ -55,7 +55,7 @@ export default function WhatsAppHub() {
     if (typeof window !== 'undefined' && !window.FB) {
       window.fbAsyncInit = function () {
         window.FB.init({
-          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '2388907868182234',
+          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
           cookie: true,
           xfbml: true,
           version: 'v20.0',
@@ -371,7 +371,7 @@ export default function WhatsAppHub() {
               type="text"
               value={manualPhoneId}
               onChange={(e) => setManualPhoneId(e.target.value)}
-              placeholder="1279365541920553"
+              placeholder="e.g. 100000000000000"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
             />
           </div>
@@ -382,7 +382,7 @@ export default function WhatsAppHub() {
               type="text"
               value={manualWabaId}
               onChange={(e) => setManualWabaId(e.target.value)}
-              placeholder="27142090378802643"
+              placeholder="e.g. 200000000000000"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
             />
           </div>
