@@ -16,7 +16,7 @@ export const verifyWebhook = async (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026';
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026-27';
 
   if (mode && token) {
     if (mode === 'subscribe' && (token === expectedToken || token === 'syncchat_verify')) {
@@ -49,26 +49,54 @@ export const handleWebhookEvent = async (req, res) => {
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0]?.value;
 
+    if (!change) return;
+
+    // 1. Extract phoneNumberId safely from metadata
     const phoneNumberId = change.metadata?.phone_number_id;
+    const wabaId = entry?.id || '';
 
-    // Find Tenant Company by Phone Number ID or connected company
-    let company = null;
-    if (phoneNumberId) {
-      company = await Company.findOne({
-        $or: [
-          { 'whatsappConfig.phoneNumberId': phoneNumberId },
-          { phoneNumberId: phoneNumberId },
-        ],
+    if (!phoneNumberId) {
+      console.error('[Inbound Webhook] Missing phoneNumberId in Meta payload metadata', {
+        wabaId,
       });
+      return;
     }
 
-    if (!company && phoneNumberId && phoneNumberId === process.env.META_PHONE_NUMBER_ID) {
-      company = await Company.findOne({ isConnected: true }) || await Company.findOne({ 'whatsappConfig.status': 'CONNECTED' });
-    }
+    // 2. Find Tenant Company STRICTLY by Phone Number ID (NO Fallbacks Allowed)
+    const company = await Company.findOne({
+      $or: [
+        { 'whatsappConfig.phoneNumberId': phoneNumberId },
+        { phoneNumberId: phoneNumberId },
+      ],
+    });
+
+    const incomingMsgPreview = change.messages?.[0];
+    const contactObjPreview = change.contacts?.[0];
+    const recipientWaId = incomingMsgPreview?.from || contactObjPreview?.wa_id || '';
 
     if (!company) {
-      company = await Company.findOne({ isConnected: true }) || await Company.findOne({ status: 'active' });
+      console.error('[Inbound Webhook] Company mapping failed', {
+        phoneNumberId,
+        wabaId,
+        recipientWaId,
+      });
+
+      await WebhookLog.create({
+        companyId: null,
+        phoneNumberId: phoneNumberId || '',
+        eventType: 'message_received_unlinked',
+        payload: body,
+        status: 'UNMATCHED',
+      });
+      return;
     }
+
+    console.log('[Inbound Webhook] Company resolved', {
+      companyId: company._id,
+      phoneNumberId,
+      wabaId,
+      recipientWaId,
+    });
 
     // Process Message Delivery/Read Status Updates (Sent, Delivered, Read, Failed)
     if (change.statuses && change.statuses.length > 0) {
@@ -92,15 +120,13 @@ export const handleWebhookEvent = async (req, res) => {
         }
       }
 
-      if (company) {
-        await WebhookLog.create({
-          companyId: company._id,
-          phoneNumberId: phoneNumberId || '',
-          eventType: 'status_updated',
-          payload: body,
-          status: 'PROCESSED',
-        });
-      }
+      await WebhookLog.create({
+        companyId: company._id,
+        phoneNumberId: phoneNumberId || '',
+        eventType: 'status_updated',
+        payload: body,
+        status: 'PROCESSED',
+      });
       return;
     }
 
@@ -114,18 +140,6 @@ export const handleWebhookEvent = async (req, res) => {
       const customerName = contactObj?.profile?.name || waId;
       const metaMessageId = incomingMsg.id;
       const messageType = incomingMsg.type || 'text';
-
-      if (!company) {
-        console.warn(`Incoming WhatsApp message for unlinked Phone Number ID: ${phoneNumberId}`);
-        await WebhookLog.create({
-          companyId: null,
-          phoneNumberId: phoneNumberId || '',
-          eventType: 'message_received_unlinked',
-          payload: body,
-          status: 'UNMATCHED',
-        });
-        return;
-      }
 
       // Auto-create Contact if does not exist
       let contact = await Contact.findOne({ companyId: company._id, waId });
