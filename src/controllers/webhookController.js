@@ -49,11 +49,9 @@ export const handleWebhookEvent = async (req, res) => {
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0]?.value;
 
-    if (!change) return;
-
     const phoneNumberId = change.metadata?.phone_number_id;
 
-    // Find Tenant Company by Phone Number ID or default active company
+    // Find Tenant Company by Phone Number ID or connected company
     let company = null;
     if (phoneNumberId) {
       company = await Company.findOne({
@@ -63,8 +61,13 @@ export const handleWebhookEvent = async (req, res) => {
         ],
       });
     }
+
+    if (!company && phoneNumberId && phoneNumberId === process.env.META_PHONE_NUMBER_ID) {
+      company = await Company.findOne({ isConnected: true }) || await Company.findOne({ 'whatsappConfig.status': 'CONNECTED' });
+    }
+
     if (!company) {
-      company = await Company.findOne({ status: 'active' });
+      company = await Company.findOne({ isConnected: true }) || await Company.findOne({ status: 'active' });
     }
 
     // Process Message Delivery/Read Status Updates (Sent, Delivered, Read, Failed)
