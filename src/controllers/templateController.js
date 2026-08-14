@@ -284,7 +284,11 @@ export const createNewTemplate = async (req, res) => {
         submittedAt = new Date();
       } catch (metaErr) {
         console.error('Meta API Submit Error:', metaErr);
-        return errorResponse(res, `Meta Submission Error: ${metaErr.message}`, 400);
+        const isAuthError = metaErr.message.includes('missing permissions') || metaErr.message.includes('does not exist') || metaErr.message.includes('100');
+        const userMsg = isAuthError
+          ? `Client WhatsApp authorization is incomplete. WABA ${wabaId} is not accessible with current credentials. Please reconnect WhatsApp with Meta.`
+          : `Meta Submission Error: ${metaErr.message}`;
+        return errorResponse(res, userMsg, 400);
       }
     }
 
