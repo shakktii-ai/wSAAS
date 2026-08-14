@@ -40,9 +40,9 @@ export const getOnboardingStatus = async (req, res) => {
       completionPercentage,
       isConnected,
       businessName: company.businessName || company.name,
-      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || company.phone || '',
-      wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '',
-      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
+      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || '',
+      wabaId: company.wabaId || company.whatsappConfig?.wabaId || '',
+      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '',
       qualityRating: company.qualityRating || 'GREEN',
       templateCount,
     });

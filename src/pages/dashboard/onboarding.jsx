@@ -1,49 +1,38 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Modal from '@/components/ui/Modal';
 import api from '@/services/api';
 import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
-  Play,
-  Send,
+  MessageSquare,
   ShieldCheck,
   Smartphone,
   Globe,
-  Settings,
-  HelpCircle,
+  ArrowRight,
   ExternalLink,
-  RefreshCw,
-  Zap,
+  Info,
 } from 'lucide-react';
 
 export default function SaaSOnboardingWizard() {
+  const router = useRouter();
   const [status, setStatus] = useState(null);
-  const [checklist, setChecklist] = useState([]);
-  const [metaReview, setMetaReview] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Test Message State
-  const [testPhone, setTestPhone] = useState('');
-  const [sendingTest, setSendingTest] = useState(false);
-  const [testResult, setTestResult] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fetchOnboardingData = async () => {
     try {
       setLoading(true);
-      const [statusRes, checkRes, reviewRes] = await Promise.all([
-        api.get('/onboarding/status'),
-        api.get('/onboarding/checklist'),
-        api.get('/onboarding/meta-review'),
-      ]);
-      if (statusRes.success && statusRes.data) setStatus(statusRes.data);
-      if (checkRes.success && checkRes.data) setChecklist(checkRes.data.checklist || []);
-      if (reviewRes.success && reviewRes.data) setMetaReview(reviewRes.data);
+      const statusRes = await api.get('/onboarding/status');
+      if (statusRes.success && statusRes.data) {
+        setStatus(statusRes.data);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load onboarding status:', err);
     } finally {
       setLoading(false);
     }
@@ -54,205 +43,169 @@ export default function SaaSOnboardingWizard() {
   }, []);
 
   const handleLaunchMetaSignup = async () => {
+    setConnecting(true);
+    setErrorMessage('');
     try {
       const res = await api.post('/meta/embedded-signup/start');
       if (res.success && res.data) {
         const appId = res.data.appId || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
-        window.open(
+        const redirectUri = window.location.origin + '/api/meta/exchange-token';
+        
+        const popup = window.open(
           `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
-            window.location.origin + '/api/meta/exchange-token'
+            redirectUri
           )}&scope=whatsapp_business_management,whatsapp_business_messaging`,
           '_blank',
           'width=600,height=700'
         );
+
+        // Poll popup or window closure to refresh connection status
+        const popupTimer = setInterval(() => {
+          if (!popup || popup.closed) {
+            clearInterval(popupTimer);
+            setConnecting(false);
+            fetchOnboardingData();
+          }
+        }, 1500);
+      } else {
+        setErrorMessage('WhatsApp connection was not completed. Please try connecting again.');
+        setConnecting(false);
       }
     } catch (err) {
-      alert('Failed to launch Meta Embedded Signup');
+      setErrorMessage(err.message || 'WhatsApp connection was not completed. Please try connecting again.');
+      setConnecting(false);
     }
   };
 
-  const handleSendTestMessage = async (e) => {
-    e.preventDefault();
-    setSendingTest(true);
-    setTestResult('');
-    try {
-      const res = await api.post('/onboarding/test-message', { phone: testPhone });
-      if (res.success) {
-        setTestResult(res.message);
-        fetchOnboardingData();
-      }
-    } catch (err) {
-      alert(err.message || 'Test message failed');
-    } finally {
-      setSendingTest(false);
-    }
-  };
-
-  const handleVerifyWebhook = async () => {
-    try {
-      const res = await api.post('/onboarding/verify');
-      if (res.success) {
-        alert(res.message);
-        fetchOnboardingData();
-      }
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+  const isConnected = status?.isConnected;
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-emerald-400" /> WhatsApp Production Onboarding & Meta App Review
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Zero-friction customer onboarding setup wizard, 1-click Meta Embedded Signup, production readiness checker, and Meta compliance tools.
-            </p>
-          </div>
-          <Button icon={Zap} onClick={handleLaunchMetaSignup}>
-            Launch Meta Embedded Signup
-          </Button>
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-emerald-400" /> WhatsApp Onboarding & Connection Setup
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Connect your official WhatsApp Business Account to start sending and receiving messages in Shakktii Inbox.
+          </p>
         </div>
 
-        {/* Progress Bar Overview */}
-        {status && (
-          <Card className="space-y-3">
+        {/* Free SaaS Disclaimer Banner */}
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-3">
+          <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div>
+            <strong className="block text-white text-sm font-semibold mb-0.5">Shakktii SaaS is Free to Use</strong>
+            <span>
+              Shakktii is free to use. WhatsApp/Meta messaging charges, if applicable, are billed directly by Meta to your Meta Business Account.
+            </span>
+          </div>
+        </div>
+
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {errorMessage}
+          </div>
+        )}
+
+        {/* Main Step Cards */}
+        <div className="space-y-4">
+          {/* Step 1: Create Account & Workspace */}
+          <Card className="border-slate-800">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-white text-sm">Account Setup Completion</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {status.completedStepsCount} of {status.totalSteps} setup steps completed
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
+                  ✓
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">1. Create Shakktii Account & Workspace</h3>
+                  <p className="text-xs text-slate-400">Account created and workspace initialized.</p>
+                </div>
               </div>
-              <span className="text-xl font-extrabold text-emerald-400 font-mono">
-                {status.completionPercentage}%
+              <span className="text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full">
+                Completed
               </span>
             </div>
-
-            <div className="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-              <div
-                className="bg-emerald-500 h-full transition-all duration-700 rounded-full"
-                style={{ width: `${status.completionPercentage}%` }}
-              />
-            </div>
           </Card>
-        )}
 
-        {/* 9-Step Onboarding Timeline */}
-        <Card title="9-Step SaaS Onboarding Wizard">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-            {(status?.steps || []).map((step) => (
-              <div
-                key={step.id}
-                className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
-                  step.completed
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400'
-                }`}
-              >
-                <span className="font-semibold">{step.id}. {step.title}</span>
-                {step.completed ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : (
-                  <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-0.5 rounded">PENDING</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Production Readiness & Test Dispatch Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Production Readiness Checklist */}
-          <Card title="Production Readiness Checker" subtitle="6-Point automated compliance & Meta connectivity checks">
-            <div className="space-y-3 pt-2">
-              {checklist.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                  <span className="text-slate-300 font-medium">{item.label}</span>
-                  <span
-                    className={`px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-full ${
-                      item.status === 'PASSED'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                    }`}
-                  >
-                    {item.status}
-                  </span>
+          {/* Step 2: Connect WhatsApp via Meta */}
+          <Card className={isConnected ? 'border-emerald-500/40' : 'border-blue-500/40 shadow-lg shadow-blue-500/5'}>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                    isConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  }`}>
+                    {isConnected ? '✓' : '2'}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">2. Connect WhatsApp Business Account</h3>
+                    <p className="text-xs text-slate-400">Authorize Shakktii via official Meta Embedded Signup.</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </Card>
 
-          {/* Test Message Dispatcher */}
-          <Card title="Verify Live Message Dispatch" subtitle="Send an instant WhatsApp Cloud API test message to your mobile number">
-            <form onSubmit={handleSendTestMessage} className="space-y-4 text-xs pt-2">
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Target WhatsApp Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
-                  placeholder="e.g. 15551234567"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                />
+                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
+                  isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                }`}>
+                  {isConnected ? 'Connected' : 'Action Required'}
+                </span>
               </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" loading={sendingTest} icon={Send}>
-                  Send Test Message
-                </Button>
-
-                <Button type="button" variant="secondary" icon={RefreshCw} onClick={handleVerifyWebhook}>
-                  Verify Webhook
-                </Button>
-              </div>
-
-              {testResult && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono">
-                  {testResult}
+              {!isConnected ? (
+                <div className="pt-2 border-t border-slate-800 space-y-3">
+                  <p className="text-xs text-slate-300">
+                    Click the button below to launch Meta Embedded Signup. You will log in with Facebook, select your WhatsApp Business Account, select your phone number, and authorize Shakktii.
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={handleLaunchMetaSignup}
+                    disabled={connecting}
+                    className="w-full md:w-auto flex items-center justify-center gap-2"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    {connecting ? 'Connecting with Meta...' : 'Connect WhatsApp with Meta'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                    <CheckCircle2 className="w-4 h-4" /> WhatsApp Business Account connected
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                    <CheckCircle2 className="w-4 h-4" /> Phone number connected ({status?.displayPhoneNumber || 'Connected'})
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                    <CheckCircle2 className="w-4 h-4" /> Webhook connected & verified
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                    <CheckCircle2 className="w-4 h-4" /> Messaging ready
+                  </div>
                 </div>
               )}
-            </form>
-          </Card>
-        </div>
-
-        {/* Meta App Review Compliance Data */}
-        {metaReview && (
-          <Card title="Meta App Review Compliance Settings" subtitle="Official credentials, permissions, and webhook configuration URLs required for Meta verification">
-            <div className="space-y-4 text-xs pt-2">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center font-mono">
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">App Mode</p>
-                  <p className="text-emerald-400 font-bold mt-1">{metaReview.appMode}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Readiness Score</p>
-                  <p className="text-purple-400 font-bold mt-1">{metaReview.readinessScore}%</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Business Status</p>
-                  <p className="text-sky-400 font-bold mt-1">{metaReview.businessVerificationStatus}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Permissions</p>
-                  <p className="text-emerald-400 font-bold mt-1">2 / 2 APPROVED</p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2 font-mono">
-                <p><span className="text-slate-400">Webhook URL:</span> <span className="text-emerald-400">{metaReview.complianceUrls?.webhookUrl}</span></p>
-                <p><span className="text-slate-400">OAuth Redirect URI:</span> <span className="text-emerald-400">{metaReview.complianceUrls?.oauthRedirectUri}</span></p>
-                <p><span className="text-slate-400">Privacy Policy URL:</span> <span className="text-slate-400">{metaReview.complianceUrls?.privacyPolicyUrl}</span></p>
-                <p><span className="text-slate-400">Terms of Service URL:</span> <span className="text-slate-400">{metaReview.complianceUrls?.termsOfServiceUrl}</span></p>
-              </div>
             </div>
           </Card>
-        )}
+
+          {/* Step 3: Go to Dashboard Inbox */}
+          <Card className={isConnected ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800 opacity-60'}>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-white">3. Access Shakktii Inbox</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Start sending broadcasts, automated replies, and managing live customer conversations.
+                </p>
+              </div>
+
+              <Button
+                variant={isConnected ? 'primary' : 'secondary'}
+                disabled={!isConnected}
+                onClick={() => router.push('/dashboard/inbox')}
+                className="w-full md:w-auto flex items-center justify-center gap-2"
+              >
+                Go to Inbox <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </Card>
+        </div>
       </div>
     </DashboardLayout>
   );

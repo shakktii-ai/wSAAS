@@ -17,7 +17,7 @@ export function resolveWhatsAppCredentials({ company, conversation, overridePhon
     conversation?.phoneNumberId ||
     company?.phoneNumberId ||
     company?.whatsappConfig?.phoneNumberId ||
-    process.env.META_PHONE_NUMBER_ID ||
+    (!company?.phoneNumberId && !company?.whatsappConfig?.phoneNumberId ? process.env.META_PHONE_NUMBER_ID : '') ||
     '';
 
   const resolvedWabaId =
@@ -25,13 +25,13 @@ export function resolveWhatsAppCredentials({ company, conversation, overridePhon
     conversation?.wabaId ||
     company?.wabaId ||
     company?.whatsappConfig?.wabaId ||
-    process.env.META_WABA_ID ||
+    (!company?.wabaId && !company?.whatsappConfig?.wabaId ? process.env.META_WABA_ID : '') ||
     '';
 
   const resolvedAccessToken =
     company?.accessToken ||
     company?.whatsappConfig?.accessToken ||
-    process.env.META_ACCESS_TOKEN ||
+    (!company?.wabaId && !company?.phoneNumberId ? process.env.META_ACCESS_TOKEN : '') ||
     '';
 
   return {

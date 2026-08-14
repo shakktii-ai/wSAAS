@@ -91,8 +91,46 @@ export const exchangeToken = async (req, res) => {
     }
 
     // Query WABA Accounts from Meta Graph API
-    let wabaId = inputWabaId || process.env.META_WABA_ID || '';
-    let phoneNumberId = inputPhoneId || process.env.META_PHONE_NUMBER_ID || '';
+    let wabaId = inputWabaId || '';
+    let phoneNumberId = inputPhoneId || '';
+
+    // If wabaId was not passed explicitly, fetch client WABAs from Meta Graph API
+    if (!wabaId && accessToken) {
+      try {
+        const wabaListRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/me/client_whatsapp_business_accounts`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (wabaListRes.data?.data && wabaListRes.data.data.length > 0) {
+          wabaId = wabaListRes.data.data[0].id;
+        } else {
+          const ownWabaRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/me/whatsapp_business_accounts`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (ownWabaRes.data?.data && ownWabaRes.data.data.length > 0) {
+            wabaId = ownWabaRes.data.data[0].id;
+          }
+        }
+      } catch (e) {
+        console.warn('WABA list lookup notice:', e.message);
+      }
+    }
+
+    if (!wabaId) {
+      return errorResponse(res, 'WhatsApp Business Account (WABA ID) could not be connected from Meta authorization.', 400);
+    }
+
+    // Auto-subscribe newly authorized WABA to Shakktii Meta App Webhooks
+    try {
+      await axios.post(
+        `https://graph.facebook.com/${META_API_VERSION}/${wabaId}/subscribed_apps`,
+        {},
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      console.log(`[Meta Embedded Signup] Auto-subscribed WABA ID ${wabaId} to Shakktii App`);
+    } catch (subErr) {
+      console.warn('[Meta Embedded Signup] WABA app subscription notice:', subErr.response?.data || subErr.message);
+    }
+
     let displayPhoneNumber = '';
     let businessName = req.company.name || 'WhatsApp Business';
     let qualityRating = 'GREEN';
@@ -126,6 +164,10 @@ export const exchangeToken = async (req, res) => {
       }
     } catch (e) {
       console.warn('Phone numbers lookup fallback:', e.message);
+    }
+
+    if (!phoneNumberId) {
+      return errorResponse(res, 'WhatsApp Phone Number ID could not be resolved for the connected WABA.', 400);
     }
 
     if (!displayPhoneNumber) {
@@ -197,10 +239,24 @@ export const exchangeToken = async (req, res) => {
       console.warn('Template auto-sync notice:', err.message);
     }
 
+    const safeCompany = {
+      _id: updatedCompany._id,
+      name: updatedCompany.name,
+      slug: updatedCompany.slug,
+      businessName: updatedCompany.businessName,
+      displayPhoneNumber: updatedCompany.displayPhoneNumber,
+      phoneNumberId: updatedCompany.phoneNumberId,
+      wabaId: updatedCompany.wabaId,
+      isConnected: updatedCompany.isConnected,
+      connectedAt: updatedCompany.connectedAt,
+      qualityRating: updatedCompany.qualityRating,
+      messagingLimit: updatedCompany.messagingLimit,
+    };
+
     return successResponse(
       res,
       {
-        company: updatedCompany,
+        company: safeCompany,
         wabaId,
         phoneNumberId,
         displayPhoneNumber,
@@ -231,9 +287,9 @@ export const getAccount = async (req, res) => {
       isConnected: company.isConnected || company.whatsappConfig?.status === 'CONNECTED',
       connectedAt: company.connectedAt || company.updatedAt,
       businessName: company.businessName || company.name,
-      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || company.phone || '',
-      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
-      wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '',
+      displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || '',
+      phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '',
+      wabaId: company.wabaId || company.whatsappConfig?.wabaId || '',
       metaBusinessId: company.metaBusinessId || '',
       qualityRating: company.qualityRating || company.whatsappConfig?.qualityRating || 'GREEN',
       messagingLimit: company.messagingLimit || 'TIER_1K',
@@ -257,8 +313,8 @@ export const getTemplates = async (req, res) => {
     const companyId = req.company._id;
     const company = await Company.findById(companyId);
 
-    const wabaId = company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '';
-    const accessToken = company.accessToken || company.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+    const wabaId = company.wabaId || company.whatsappConfig?.wabaId || '';
+    const accessToken = company.accessToken || company.whatsappConfig?.accessToken || '';
 
     // Live Sync from Meta Graph API
     if (wabaId && accessToken) {
@@ -324,8 +380,16 @@ export const disconnectAccount = async (req, res) => {
       wabaId: '',
       phoneNumberId: '',
       displayPhoneNumber: '',
-      'whatsappConfig.status': 'DISCONNECTED',
-      'whatsappConfig.accessToken': '',
+      webhookVerified: false,
+      whatsappConfig: {
+        status: 'DISCONNECTED',
+        phoneNumberId: '',
+        wabaId: '',
+        accessToken: '',
+        displayPhoneNumber: '',
+        qualityRating: 'GREEN',
+        webhookVerifyToken: '',
+      },
     });
 
     return successResponse(res, null, 'WhatsApp Business Account disconnected successfully');

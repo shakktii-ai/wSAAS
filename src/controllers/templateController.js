@@ -258,11 +258,15 @@ export const createNewTemplate = async (req, res) => {
     let submittedAt = null;
 
     if (submit) {
-      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken;
 
       if (!wabaId || !accessToken) {
-        return errorResponse(res, 'Meta WABA credentials missing in workspace configuration', 400);
+        return errorResponse(
+          res,
+          'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace. Please connect your WhatsApp Business Account via Meta Embedded Signup.',
+          400
+        );
       }
 
       try {
@@ -444,11 +448,11 @@ export const updateTemplate = async (req, res) => {
     existing.updatedBy = user?._id || null;
 
     if (submit) {
-      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken;
 
       if (!wabaId || !accessToken) {
-        return errorResponse(res, 'Meta WABA credentials missing in workspace configuration', 400);
+        return errorResponse(res, 'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace.', 400);
       }
 
       const metaResult = await createMetaTemplate({
@@ -502,11 +506,11 @@ export const submitTemplateToMeta = async (req, res) => {
       return errorResponse(res, 'Template not found', 404);
     }
 
-    const wabaId = company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-    const accessToken = company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+    const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId;
+    const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken;
 
     if (!wabaId || !accessToken) {
-      return errorResponse(res, 'Meta WABA credentials missing in workspace configuration', 400);
+      return errorResponse(res, 'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace.', 400);
     }
 
     try {
@@ -587,8 +591,8 @@ export const deleteTemplate = async (req, res) => {
 
     // Try Meta deletion if metaTemplateId or name exists and not DRAFT
     if (template.status !== 'DRAFT' && template.name) {
-      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId;
+      const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken;
       if (wabaId && accessToken) {
         try {
           await deleteMetaTemplate({ wabaId, accessToken, templateName: template.name });
@@ -627,11 +631,11 @@ export const syncTemplatesFromMeta = async (req, res) => {
     const company = req.company;
     const user = req.user;
 
-    const wabaId = company?.whatsappConfig?.wabaId || process.env.META_WABA_ID;
-    const accessToken = company?.whatsappConfig?.accessToken || process.env.META_ACCESS_TOKEN;
+    const wabaId = company?.wabaId || company?.whatsappConfig?.wabaId;
+    const accessToken = company?.accessToken || company?.whatsappConfig?.accessToken;
 
     if (!wabaId || !accessToken) {
-      return errorResponse(res, 'WABA ID or Access Token not configured for workspace', 400);
+      return errorResponse(res, 'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace.', 400);
     }
 
     const metaTemplates = await fetchMetaTemplates({ wabaId, accessToken });

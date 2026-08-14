@@ -1,100 +1,86 @@
 import connectDB from '@/lib/db';
 import Company from '@/models/Company';
-import Subscription from '@/models/Subscription';
-import Invoice from '@/models/Invoice';
 import Message from '@/models/Message';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
+/**
+ * GET /api/billing
+ * Returns Shakktii Free SaaS Plan details and connected Meta WABA billing info.
+ */
 export const getBillingDetails = async (req, res) => {
   try {
     await connectDB();
     const companyId = req.company._id;
+    const company = await Company.findById(companyId);
 
     // Count dynamic messages sent this month
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const actualMessagesCount = await Message.countDocuments({
+    const usedMessagesThisMonth = await Message.countDocuments({
       companyId,
       createdAt: { $gte: startOfMonth },
     });
 
-    let subscription = await Subscription.findOne({ companyId });
-    if (!subscription) {
-      subscription = await Subscription.create({
-        companyId,
-        plan: req.company.plan ? req.company.plan.toUpperCase() : 'PRO',
-        status: 'active',
-        usedMessagesThisMonth: actualMessagesCount,
-      });
-    } else {
-      subscription.usedMessagesThisMonth = actualMessagesCount;
-      await subscription.save();
-    }
+    const billingData = {
+      shakktiiPlan: {
+        name: 'FREE',
+        price: 0,
+        currency: 'INR',
+        billingProvider: company.billingProvider || 'NONE',
+        subscriptionStatus: company.subscriptionStatus || 'FREE',
+        isFree: true,
+      },
+      metaWhatsappInfo: {
+        isConnected: company.isConnected || company.whatsappConfig?.status === 'CONNECTED',
+        wabaId: company.wabaId || company.whatsappConfig?.wabaId || process.env.META_WABA_ID || '',
+        phoneNumberId: company.phoneNumberId || company.whatsappConfig?.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
+        displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || company.phone || '',
+        businessName: company.businessName || company.name || 'WhatsApp Business',
+        qualityRating: company.qualityRating || 'GREEN',
+        messagingLimit: company.messagingLimit || 'TIER_1K',
+        metaBillingNotice: 'WhatsApp conversation charges, if applicable, are billed directly by Meta to your Meta Business Manager account.',
+      },
+      usageStats: {
+        usedMessagesThisMonth,
+      },
+    };
 
-    let invoices = await Invoice.find({ companyId }).sort({ paidAt: -1 });
-    if (invoices.length === 0) {
-      invoices = [
-        await Invoice.create({
-          companyId,
-          invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-          amount: subscription.plan === 'ENTERPRISE' ? 199.0 : subscription.plan === 'PRO' ? 49.0 : 0.0,
-          currency: 'USD',
-          status: 'PAID',
-          paidAt: new Date(),
-        }),
-      ];
-    }
-
-    return successResponse(res, {
-      subscription,
-      invoices,
-    });
+    return successResponse(res, billingData);
   } catch (error) {
-    console.error('Billing Error:', error);
+    console.error('Billing Fetch Error:', error);
     return errorResponse(res, 'Failed to fetch billing info', 500);
   }
 };
 
+/**
+ * POST /api/billing
+ * Shakktii SaaS is completely FREE. Returns 200 OK acknowledging free tier status.
+ */
 export const updateSubscriptionPlan = async (req, res) => {
   try {
     await connectDB();
-    const { plan } = req.body;
     const companyId = req.company._id;
 
-    if (!['FREE', 'PRO', 'ENTERPRISE'].includes(plan)) {
-      return errorResponse(res, 'Invalid plan selection', 400);
-    }
-
-    const company = await Company.findById(companyId);
-    company.plan = plan.toLowerCase();
-    await company.save();
-
-    const limits = {
-      FREE: 1000,
-      PRO: 50000,
-      ENTERPRISE: 500000,
-    };
-
-    const subscription = await Subscription.findOneAndUpdate(
-      { companyId },
+    const company = await Company.findByIdAndUpdate(
+      companyId,
       {
-        plan,
-        monthlyMessageLimit: limits[plan] || 50000,
+        plan: 'free',
+        billingProvider: 'NONE',
+        subscriptionStatus: 'FREE',
       },
-      { upsert: true, new: true }
+      { new: true }
     );
 
-    // Create Invoice for upgrade
-    await Invoice.create({
-      companyId,
-      invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-      amount: plan === 'ENTERPRISE' ? 199.0 : plan === 'PRO' ? 49.0 : 0.0,
-      currency: 'USD',
-      status: 'PAID',
-      paidAt: new Date(),
-    });
-
-    return successResponse(res, subscription, `Upgraded to ${plan} Plan successfully`);
+    return successResponse(
+      res,
+      {
+        plan: 'FREE',
+        billingProvider: 'NONE',
+        subscriptionStatus: 'FREE',
+        message: 'Shakktii SaaS is completely FREE. WhatsApp usage charges, if applicable, are billed directly by Meta.',
+      },
+      'Shakktii SaaS is 100% Free'
+    );
   } catch (error) {
-    return errorResponse(res, 'Failed to update subscription plan', 500);
+    return errorResponse(res, 'Failed to process request', 500);
   }
 };

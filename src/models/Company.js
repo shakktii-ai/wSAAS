@@ -38,7 +38,15 @@ const CompanySchema = new mongoose.Schema(
     plan: {
       type: String,
       enum: ['free', 'pro', 'enterprise'],
-      default: 'pro',
+      default: 'free',
+    },
+    billingProvider: {
+      type: String,
+      default: 'NONE',
+    },
+    subscriptionStatus: {
+      type: String,
+      default: 'FREE',
     },
     // Meta Embedded Signup Fields
     metaBusinessId: { type: String, default: '' },
