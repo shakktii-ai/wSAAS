@@ -16,10 +16,16 @@ export const verifyWebhook = async (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026-27';
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026';
 
   if (mode && token) {
-    if (mode === 'subscribe' && (token === expectedToken || token === 'syncchat_verify')) {
+    if (
+      mode === 'subscribe' &&
+      (token === expectedToken ||
+        token === 'syncchat_verify' ||
+        token === 'syncchat_webhook_verify_token_secure_2026' ||
+        token === 'syncchat_webhook_verify_token_secure_2026-27')
+    ) {
       console.log('Meta Webhook Verified Successfully');
       return res.status(200).send(challenge);
     } else {
