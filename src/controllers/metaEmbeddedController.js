@@ -55,17 +55,13 @@ export const exchangeToken = async (req, res) => {
         });
         accessToken = tokenRes.data.access_token;
       } catch (err) {
-        console.error('Code exchange failed, checking fallback token:', err.response?.data || err.message);
-        accessToken = process.env.META_ACCESS_TOKEN || '';
+        console.error('Code exchange failed:', err.response?.data || err.message);
+        return errorResponse(res, `Meta OAuth authorization failed: ${err.response?.data?.error?.message || err.message}`, 400);
       }
     }
 
     if (!accessToken) {
-      accessToken = process.env.META_ACCESS_TOKEN || '';
-    }
-
-    if (!accessToken) {
-      return errorResponse(res, 'Failed to obtain access token from Meta OAuth', 400);
+      return errorResponse(res, 'Meta OAuth authorization code or valid access token is required to connect your WhatsApp Business Account.', 400);
     }
 
     // Exchange for Long-Lived Token
@@ -283,8 +279,16 @@ export const getAccount = async (req, res) => {
     const company = await Company.findById(req.company._id);
     const templateCount = await WhatsAppTemplate.countDocuments({ companyId: req.company._id });
 
+    const token = company.accessToken || company.whatsappConfig?.accessToken || '';
+    const hasValidToken = Boolean(token && token !== process.env.META_ACCESS_TOKEN);
+    const isOwnerCompany = Boolean(company.wabaId && company.wabaId === process.env.META_WABA_ID);
+    
+    // Connection is true ONLY if token belongs to client OR company is owner company
+    const isConnected = Boolean(company.isConnected && (hasValidToken || isOwnerCompany));
+
     const accountData = {
-      isConnected: company.isConnected || company.whatsappConfig?.status === 'CONNECTED',
+      isConnected,
+      status: isConnected ? 'CONNECTED' : 'NEEDS_RECONNECTION',
       connectedAt: company.connectedAt || company.updatedAt,
       businessName: company.businessName || company.name,
       displayPhoneNumber: company.displayPhoneNumber || company.whatsappConfig?.displayPhoneNumber || '',
@@ -293,8 +297,9 @@ export const getAccount = async (req, res) => {
       metaBusinessId: company.metaBusinessId || '',
       qualityRating: company.qualityRating || company.whatsappConfig?.qualityRating || 'GREEN',
       messagingLimit: company.messagingLimit || 'TIER_1K',
-      webhookStatus: company.webhookVerified ? 'VERIFIED' : 'PENDING',
+      webhookStatus: isConnected ? 'VERIFIED' : 'PENDING',
       templateCount,
+      requiresReconnection: !isConnected && Boolean(company.wabaId),
     };
 
     return successResponse(res, accountData);
