@@ -3,16 +3,8 @@
  * SyncChat Live WhatsApp Chatbot Execution Engine
  * ============================================================
  *
- * This engine connects published BotFlow workflows to live
- * incoming WhatsApp messages via Meta Cloud API webhook.
- *
- * Flow:
- *   Incoming Message → Match Trigger → Execute Nodes Sequentially
- *   → Send Meta Cloud API Messages → Update MongoDB → Push Socket.IO
- *
- * Multi-tenant: strictly isolated by companyId
- * Async: webhook returns HTTP 200 immediately, engine runs async
- * Performance: Redis session cache, BullMQ delay jobs
+ * Direct, deterministic execution engine for published BotFlow workflows.
+ * Multi-tenant isolated by companyId.
  */
 
 import connectDB from '@/lib/db';
@@ -28,69 +20,71 @@ import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
 import { queueService } from '@/lib/queueService';
 import { ragEngine } from '@/lib/ragEngine';
-import { logWhatsAppTrace, logWhatsAppError } from './whatsappTraceLogger.js';
+import { logWhatsAppTrace, logWhatsAppError, logChatbotTrace, logChatbotError } from './whatsappTraceLogger.js';
 import axios from 'axios';
 
 const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
 
 // ─── TRIGGER MATCHING ───────────────────────────────────────────────────────
 
-/**
- * Normalize message text for trigger matching
- */
 function normalizeText(text) {
   return (text || '').toLowerCase().trim();
 }
 
-/**
- * Check if incoming message matches a bot flow trigger keyword.
- * Supports: exact match, lowercase, trimmed.
- */
 function matchesTrigger(triggerKeyword, incomingText) {
   if (!triggerKeyword) return false;
   const trigger = normalizeText(triggerKeyword);
   const incoming = normalizeText(incomingText);
 
-  // Exact match
   if (incoming === trigger) return true;
-  // Contains match (keyword inside message)
   if (incoming.includes(trigger)) return true;
-  // Starts with match
   if (incoming.startsWith(trigger)) return true;
 
   return false;
+}
+
+async function updateConversationLastMessage(conversationId, lastMessageText, messageType = 'text') {
+  try {
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: lastMessageText,
+      lastMessageType: messageType,
+      lastMessageAt: new Date(),
+    });
+  } catch (e) {
+    // Non-blocking catch
+  }
 }
 
 // ─── MAIN ENTRY POINT ────────────────────────────────────────────────────────
 
 /**
  * Called from webhookController after saving inbound message.
- * Finds matching published workflows and triggers execution.
- *
- * @param {Object} ctx - { company, conversation, contact, incomingText, messageType, traceId, webhookStart }
+ * @param {Object} ctx - { company, conversation, contact, incomingText, messageType, buttonPayloadId, traceId, webhookStart }
  */
 export async function triggerChatbotEngine(ctx) {
-  const { company, conversation, contact, incomingText, messageType, traceId, webhookStart } = ctx;
+  const { company, conversation, contact, incomingText, messageType, buttonPayloadId, traceId, webhookStart } = ctx;
   const companyId = company._id;
   const phoneNumberId = company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '';
   const waId = contact.phone || contact.waId;
 
-  logWhatsAppTrace({
+  logChatbotTrace({
     traceId,
-    stage: 'CHATBOT_TRIGGERED',
+    stage: 'CHATBOT_TRIGGER_CHECK',
     companyId,
-    phoneNumberId,
+    conversationId: conversation._id,
     waId,
+    messageType,
+    messageText: incomingText,
+    buttonPayloadId,
     durationMs: Date.now() - (webhookStart || Date.now()),
   });
 
-  // Only process text messages and button replies for trigger matching
   if (!['text', 'button', 'interactive'].includes(messageType) && !incomingText) {
-    logWhatsAppTrace({
+    logChatbotTrace({
       traceId,
       stage: 'CHATBOT_SKIP',
       companyId,
-      phoneNumberId,
+      conversationId: conversation._id,
       waId,
       metadata: { reason: 'NON_TEXT_MESSAGE_TYPE', messageType },
     });
@@ -100,7 +94,7 @@ export async function triggerChatbotEngine(ctx) {
   try {
     await connectDB();
 
-    // Check if there is an ACTIVE session for this contact (button continuation flow)
+    // 1. Look for ACTIVE session for this contact
     const existingSession = await BotSession.findOne({
       companyId,
       customerPhone: contact.phone || contact.waId,
@@ -109,26 +103,57 @@ export async function triggerChatbotEngine(ctx) {
       expiresAt: { $gt: new Date() },
     });
 
+    logChatbotTrace({
+      traceId,
+      stage: 'SESSION_LOOKUP',
+      companyId,
+      conversationId: conversation._id,
+      waId,
+      sessionId: existingSession ? existingSession._id.toString() : 'NONE',
+      isActive: !!existingSession,
+      currentNodeId: existingSession ? existingSession.currentNodeId : 'N/A',
+      flowId: existingSession ? existingSession.botFlowId.toString() : 'N/A',
+    });
+
     if (existingSession) {
-      // Continue existing session from button reply
       const flow = await BotFlow.findById(existingSession.botFlowId);
       if (flow && flow.isActive) {
-        // Find next node based on button payload matching currentNodeId
         const currentNode = flow.nodes.find((n) => n.id === existingSession.currentNodeId);
-        if (currentNode && currentNode.buttons && currentNode.buttons.length > 0) {
-          const matchedButton = currentNode.buttons.find(
-            (b) =>
-              normalizeText(b.title) === normalizeText(incomingText) ||
-              b.id === incomingText
-          );
+        if (currentNode) {
+          const availableButtons = currentNode.buttons || currentNode.listItems || [];
+          let matchedButton = null;
+
+          if (availableButtons.length > 0) {
+            matchedButton = availableButtons.find(
+              (b) =>
+                (buttonPayloadId && (b.id === buttonPayloadId || b.nextNodeId === buttonPayloadId || normalizeText(b.title) === normalizeText(buttonPayloadId))) ||
+                (incomingText && (b.id === incomingText || normalizeText(b.title) === normalizeText(incomingText)))
+            );
+          }
+
           if (matchedButton && matchedButton.nextNodeId) {
-            logWhatsAppTrace({
+            logChatbotTrace({
               traceId,
-              stage: 'CHATBOT_SESSION_CONTINUED',
+              stage: 'SESSION_DECISION',
+              decision: 'CONTINUE_EXISTING_SESSION',
               companyId,
-              phoneNumberId,
+              conversationId: conversation._id,
               waId,
-              metadata: { flowId: flow._id.toString(), nextNodeId: matchedButton.nextNodeId },
+              sessionId: existingSession._id.toString(),
+              currentNodeId: currentNode.id,
+              flowId: flow._id.toString(),
+            });
+
+            logChatbotTrace({
+              traceId,
+              stage: 'NODE_RESOLUTION',
+              companyId,
+              conversationId: conversation._id,
+              waId,
+              currentNodeId: currentNode.id,
+              buttonPayloadId: buttonPayloadId || 'N/A',
+              buttonText: incomingText,
+              resolvedNextNodeId: matchedButton.nextNodeId,
             });
 
             await executeChatbotFlow({
@@ -149,98 +174,172 @@ export async function triggerChatbotEngine(ctx) {
       }
     }
 
-    // Find all PUBLISHED workflows matching the trigger keyword for this company
+    // 2. No button matched existing session — Check for new trigger keyword match
     const activeFlows = await BotFlow.find({ companyId, isActive: true });
-    if (!activeFlows.length) {
-      logWhatsAppTrace({
-        traceId,
-        stage: 'CHATBOT_SKIP',
-        companyId,
-        phoneNumberId,
-        waId,
-        metadata: { reason: 'NO_PUBLISHED_FLOWS' },
-      });
-      return;
-    }
-
     const matchedFlow = activeFlows.find((f) => matchesTrigger(f.triggerKeyword, incomingText));
-    if (!matchedFlow) {
-      logWhatsAppTrace({
+
+    if (matchedFlow) {
+      logChatbotTrace({
         traceId,
-        stage: 'CHATBOT_SKIP',
+        stage: 'SESSION_DECISION',
+        decision: 'START_NEW_SESSION',
         companyId,
-        phoneNumberId,
+        conversationId: conversation._id,
         waId,
-        metadata: { reason: 'NO_TRIGGER_MATCH', incomingText },
+        flowId: matchedFlow._id.toString(),
       });
-      return;
+
+      // Deactivate older sessions for this contact
+      await BotSession.updateMany(
+        { companyId, customerPhone: contact.phone || contact.waId, isActive: true },
+        { isActive: false }
+      );
+
+      const session = await BotSession.create({
+        companyId,
+        contactId: contact._id,
+        conversationId: conversation._id,
+        botFlowId: matchedFlow._id,
+        customerPhone: contact.phone || contact.waId,
+        currentNodeId: matchedFlow.nodes[0]?.id || '',
+        isActive: true,
+        isPaused: false,
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000), // 24hr expiration
+      });
+
+      const startNode = matchedFlow.nodes[0];
+      if (startNode) {
+        await executeChatbotFlow({
+          companyId,
+          company,
+          flow: matchedFlow,
+          session,
+          startNodeId: startNode.id,
+          conversation,
+          contact,
+          incomingText,
+          traceId,
+          webhookStart,
+        });
+        return;
+      }
     }
 
-    logWhatsAppTrace({
+    // 3. NO BUTTON Nor TRIGGER MATCHED — Handle Unmatched Customer Text (NO SILENT DROP!)
+    logChatbotTrace({
       traceId,
-      stage: 'CHATBOT_FLOW_MATCHED',
+      stage: 'UNMATCHED_INPUT',
       companyId,
-      phoneNumberId,
-      waId,
-      metadata: { chatbotId: matchedFlow._id.toString(), flowName: matchedFlow.name },
-    });
-
-    // Deactivate any existing sessions for this contact before starting new one
-    await BotSession.updateMany(
-      { companyId, customerPhone: contact.phone || contact.waId, isActive: true },
-      { isActive: false }
-    );
-
-    // Create new session
-    const session = await BotSession.create({
-      companyId,
-      contactId: contact._id,
       conversationId: conversation._id,
-      botFlowId: matchedFlow._id,
-      customerPhone: contact.phone || contact.waId,
-      currentNodeId: matchedFlow.nodes[0]?.id || '',
-      isActive: true,
-      isPaused: false,
+      waId,
+      messageText: incomingText,
+      expectedInput: existingSession ? 'button_reply' : 'trigger_keyword',
+      action: 'ATTEMPTING_RAG_OR_FALLBACK',
     });
 
-    // Find the START node (first node in nodes array)
-    const startNode = matchedFlow.nodes[0];
-    if (!startNode) {
-      logWhatsAppTrace({
-        traceId,
-        stage: 'CHATBOT_SKIP',
+    // Attempt Grounded AI / RAG Fallback
+    try {
+      const ragResult = await ragEngine.generateGroundedResponse({
         companyId,
-        phoneNumberId,
-        waId,
-        metadata: { reason: 'NO_START_NODE' },
+        query: incomingText,
+        conversationId: conversation._id.toString(),
       });
-      return;
+
+      if (ragResult && ragResult.answer) {
+        logChatbotTrace({
+          traceId,
+          stage: 'CHATBOT_RESPONSE_STARTED',
+          companyId,
+          conversationId: conversation._id,
+          waId,
+          metadata: { responseType: 'RAG_AI_FALLBACK' },
+        });
+
+        const { resolvedPhoneNumberId, resolvedWabaId, resolvedAccessToken } = resolveWhatsAppCredentials({ company, conversation });
+        const sentResult = await sendMetaText({
+          phoneNumberId: resolvedPhoneNumberId,
+          accessToken: resolvedAccessToken,
+          to: contact.phone || contact.waId,
+          text: ragResult.answer,
+          companyId,
+          conversationId: conversation._id,
+          wabaId: resolvedWabaId,
+          traceId,
+        });
+
+        const wamid = sentResult?.messages?.[0]?.id || `rag_${Date.now()}`;
+        const savedMsg = await saveOutboundMessage({
+          companyId,
+          conversationId: conversation._id,
+          contactId: contact._id,
+          wamid,
+          messageType: 'text',
+          body: ragResult.answer,
+        });
+        socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+        await updateConversationLastMessage(conversation._id, ragResult.answer, 'text');
+
+        logChatbotTrace({
+          traceId,
+          stage: 'CHATBOT_RESPONSE_SENT',
+          companyId,
+          conversationId: conversation._id,
+          waId,
+          metadata: { metaMessageId: wamid, confidenceScore: ragResult.confidenceScore },
+        });
+        return;
+      }
+    } catch (ragErr) {
+      // RAG failed or not available — proceed to fallback guidance
     }
 
-    // Execute flow directly (Guarantees Vercel Serverless execution)
-    await executeChatbotFlow({
-      companyId,
-      company,
-      flow: matchedFlow,
-      session,
-      startNodeId: startNode.id,
-      conversation,
-      contact,
-      incomingText,
-      traceId,
-      webhookStart,
-    });
+    // Default Fallback Guidance (NO SILENT DROP!)
+    const fallbackGuidance = `I didn't quite catch that. Please type 'hii' to view our main menu options or contact support!`;
+    const { resolvedPhoneNumberId, resolvedWabaId, resolvedAccessToken } = resolveWhatsAppCredentials({ company, conversation });
+
+    if (resolvedPhoneNumberId && resolvedAccessToken) {
+      const sentResult = await sendMetaText({
+        phoneNumberId: resolvedPhoneNumberId,
+        accessToken: resolvedAccessToken,
+        to: contact.phone || contact.waId,
+        text: fallbackGuidance,
+        companyId,
+        conversationId: conversation._id,
+        wabaId: resolvedWabaId,
+        traceId,
+      });
+
+      const wamid = sentResult?.messages?.[0]?.id || `fb_${Date.now()}`;
+      const savedMsg = await saveOutboundMessage({
+        companyId,
+        conversationId: conversation._id,
+        contactId: contact._id,
+        wamid,
+        messageType: 'text',
+        body: fallbackGuidance,
+      });
+      socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+      await updateConversationLastMessage(conversation._id, fallbackGuidance, 'text');
+
+      logChatbotTrace({
+        traceId,
+        stage: 'CHATBOT_RESPONSE_SENT',
+        companyId,
+        conversationId: conversation._id,
+        waId,
+        metadata: { metaMessageId: wamid, type: 'FALLBACK_GUIDANCE' },
+      });
+    }
   } catch (err) {
-    logWhatsAppError({
+    logChatbotError({
       traceId,
-      stage: 'CHATBOT_ENGINE_EXCEPTION',
+      stage: 'TRIGGER_CHATBOT_EXCEPTION',
       companyId,
-      phoneNumberId,
+      conversationId: conversation._id,
       waId,
-      errorCode: 'ENGINE_EXCEPTION',
+      errorCode: 'CHATBOT_EXCEPTION',
       errorMessage: err.message,
     });
-    console.error('[ChatbotEngine] triggerChatbotEngine error:', err.message);
   }
 }
 
@@ -249,8 +348,19 @@ export async function triggerChatbotEngine(ctx) {
 /**
  * Execute a chatbot workflow node-by-node starting from startNodeId.
  */
-async function executeChatbotFlow({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText }) {
+async function executeChatbotFlow({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText, traceId, webhookStart }) {
   const executionStart = Date.now();
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_STARTED',
+    companyId,
+    conversationId: conversation._id,
+    waId: contact.phone || contact.waId,
+    sessionId: session._id.toString(),
+    flowId: flow._id.toString(),
+    currentNodeId: startNodeId,
+  });
 
   const log = await BotExecutionLog.create({
     companyId,
@@ -275,8 +385,9 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
   const targetPhone = contact.phone || contact.waId;
 
   let currentNodeId = startNodeId;
-  const maxSteps = 50; // Safety limit
+  const maxSteps = 50;
   let steps = 0;
+  let lastResult = null;
 
   while (currentNodeId && steps < maxSteps) {
     steps++;
@@ -301,10 +412,13 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
         incomingText,
         session,
         flow,
+        traceId,
       });
 
+      lastResult = result;
       nodeOutput = result.output || {};
       if (result.nextNodeId !== undefined) nextNodeId = result.nextNodeId;
+
       if (result.pauseSession) {
         // Human handoff – pause chatbot
         await BotSession.findByIdAndUpdate(session._id, {
@@ -313,11 +427,40 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
         });
         break;
       }
+
+      if (result.pauseForInput) {
+        // Interactive Buttons or List Node — Keep session active and point to THIS node!
+        await BotSession.findByIdAndUpdate(session._id, {
+          currentNodeId: node.id,
+          isActive: true,
+          updatedAt: new Date(),
+        });
+
+        logChatbotTrace({
+          traceId,
+          stage: 'CHATBOT_PAUSED_FOR_INPUT',
+          companyId,
+          conversationId: conversation._id,
+          waId: targetPhone,
+          sessionId: session._id.toString(),
+          currentNodeId: node.id,
+        });
+
+        break; // Pause loop waiting for customer button tap
+      }
+
       if (result.endExecution) break;
     } catch (err) {
       nodeError = err.message;
-      console.error(`[ChatbotEngine] Node ${node.type}(${node.id}) error:`, err.message);
-      // For critical nodes, stop; for non-critical, continue
+      logChatbotError({
+        traceId,
+        stage: 'NODE_EXECUTION_ERROR',
+        companyId,
+        conversationId: conversation._id,
+        waId: targetPhone,
+        errorCode: 'NODE_ERROR',
+        errorMessage: err.message,
+      });
       if (['text', 'buttons', 'list'].includes(node.type)) break;
     }
 
@@ -336,13 +479,14 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
       currentNodeId: nextNodeId,
     });
 
-    // Update session current node
-    await BotSession.findByIdAndUpdate(session._id, { currentNodeId: nextNodeId });
+    if (!lastResult?.pauseForInput) {
+      await BotSession.findByIdAndUpdate(session._id, { currentNodeId: nextNodeId, updatedAt: new Date() });
+    }
 
     currentNodeId = nextNodeId;
   }
 
-  // Mark execution complete
+  // Finalize Session
   const totalDurationMs = Date.now() - executionStart;
   await BotExecutionLog.findByIdAndUpdate(log._id, {
     status: 'COMPLETED',
@@ -350,89 +494,103 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
     totalDurationMs,
   });
 
-  // Mark BotSession inactive so subsequent customer messages trigger new flows cleanly
-  await BotSession.findByIdAndUpdate(session._id, {
-    isActive: false,
-    completedAt: new Date(),
-  });
+  // ONLY mark BotSession inactive if flow completed terminal node (NOT paused for input!)
+  if (!lastResult?.pauseForInput && !lastResult?.pauseSession) {
+    await BotSession.findByIdAndUpdate(session._id, {
+      isActive: false,
+      completedAt: new Date(),
+    });
+  }
 
-  // Increment flow execution count
   await BotFlow.findByIdAndUpdate(flow._id, { $inc: { executionCount: 1 } });
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_COMPLETED',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    sessionId: session._id.toString(),
+    durationMs: totalDurationMs,
+  });
 }
 
-// ─── NODE EXECUTOR ───────────────────────────────────────────────────────────
+// ─── NODE EXECUTORS ───────────────────────────────────────────────────────────
 
-/**
- * Execute a single workflow node and return { nextNodeId, output, endExecution, pauseSession }
- */
-async function executeNode({ node, company, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, incomingText, session, flow }) {
+async function executeNode({ node, company, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, incomingText, session, flow, traceId }) {
   switch (node.type) {
     case 'text':
-      return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company });
+      return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company, traceId });
 
     case 'buttons':
     case 'quick_reply':
-      return executeButtonsNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company });
+      return executeButtonsNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company, traceId });
 
     case 'list':
-      return executeListNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company });
+      return executeListNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
 
     case 'media':
-      return executeMediaNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company });
+      return executeMediaNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
+
+    case 'template':
+      return executeTemplateNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
 
     case 'condition':
-      return executeConditionNode({ node, incomingText, contact, session });
+      return executeConditionNode({ node, incomingText, contact });
 
-    case 'webhook':
-    case 'api':
-      return executeHttpNode({ node, contact, conversation });
+    case 'handoff':
+      return executeHandoffNode({ conversation, companyId });
+
+    case 'rag_ai':
+      return executeRagAiNode({ node, incomingText, companyId, conversation, contact, phoneNumberId, accessToken, targetPhone, traceId });
+
+    case 'end':
+      return { endExecution: true, nextNodeId: '' };
 
     default:
-      // Skip unknown nodes
-      return { nextNodeId: node.nextNodeId, output: { skipped: true, type: node.type } };
+      return { nextNodeId: node.nextNodeId };
   }
 }
 
 // ─── TEXT NODE ───────────────────────────────────────────────────────────────
 
-async function executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company }) {
-  const text = node.content || node.title || 'Hello!';
+async function executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId }) {
+  const text = node.content || node.text || node.title || 'Hello!';
 
-  let sentResult = null;
-  try {
-    sentResult = await sendMetaText({ phoneNumberId, accessToken, to: targetPhone, text });
-  } catch (err) {
-    console.warn('[ChatbotEngine] sendMetaText failed:', err.message);
-    sentResult = { messages: [{ id: `bot_sim_${Date.now()}` }] };
-  }
+  const sentResult = await sendMetaText({
+    phoneNumberId, accessToken, to: targetPhone, text, companyId, conversationId: conversation._id, wabaId: conversation.wabaId, traceId,
+  });
 
-  const wamid = sentResult?.messages?.[0]?.id || `bot_${Date.now()}`;
-
-  // Save outbound message to MongoDB
+  const wamid = sentResult?.messages?.[0]?.id || `bot_txt_${Date.now()}`;
   const savedMsg = await saveOutboundMessage({
     companyId, conversationId: conversation._id, contactId: contact._id,
     wamid, messageType: 'text', body: text,
   });
-
-  // Push to Shared Inbox via Socket.IO
   socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
   await updateConversationLastMessage(conversation._id, text, 'text');
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'text' },
+  });
 
   return { nextNodeId: node.nextNodeId, output: { wamid, text } };
 }
 
 // ─── BUTTONS NODE ────────────────────────────────────────────────────────────
 
-async function executeButtonsNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company }) {
+async function executeButtonsNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company, traceId }) {
   const bodyText = node.content || node.title || 'Please choose an option:';
-  const buttons = (node.buttons || []).slice(0, 3); // WhatsApp max 3 buttons
+  const buttons = (node.buttons || []).slice(0, 3);
 
   if (buttons.length === 0) {
-    // Fallback to plain text
-    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, company });
+    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
   }
 
-  // Build interactive button message
   const interactivePayload = {
     type: 'interactive',
     interactive: {
@@ -442,7 +600,7 @@ async function executeButtonsNode({ node, phoneNumberId, accessToken, targetPhon
         buttons: buttons.map((b, idx) => ({
           type: 'reply',
           reply: {
-            id: b.id || `btn_${idx}`,
+            id: b.id || b.nextNodeId || `btn_${idx}`,
             title: (b.title || `Option ${idx + 1}`).substring(0, 20),
           },
         })),
@@ -457,16 +615,15 @@ async function executeButtonsNode({ node, phoneNumberId, accessToken, targetPhon
       phoneNumberId, accessToken, to: targetPhone,
       type: 'interactive',
       payload: { interactive: interactivePayload.interactive },
+      companyId, conversationId: conversation._id, wabaId: conversation.wabaId, traceId,
     });
   } catch (err) {
-    console.warn('[ChatbotEngine] Interactive button send failed, using text fallback:', err.message);
     const fallbackText = `${bodyText}\n\n${buttons.map((b, i) => `${i + 1}. ${b.title}`).join('\n')}`;
     sentResult = { messages: [{ id: `bot_btn_${Date.now()}` }] };
-    // Send as plain text fallback
     try {
-      await sendMetaText({ phoneNumberId, accessToken, to: targetPhone, text: fallbackText });
+      await sendMetaText({ phoneNumberId, accessToken, to: targetPhone, text: fallbackText, companyId, conversationId: conversation._id, traceId });
     } catch (e) {
-      console.warn('[ChatbotEngine] Text fallback also failed:', e.message);
+      // Ignore
     }
   }
 
@@ -478,24 +635,33 @@ async function executeButtonsNode({ node, phoneNumberId, accessToken, targetPhon
   socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
   await updateConversationLastMessage(conversation._id, bodyText, 'interactive');
 
-  // Buttons node waits for customer reply – nextNodeId is handled via session lookup
-  // Return empty nextNodeId so execution pauses waiting for button tap
-  return { nextNodeId: '', output: { wamid, buttons: buttons.map((b) => b.title) } };
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'buttons', buttonOptions: buttons.map((b) => b.title) },
+  });
+
+  // Buttons node waits for customer reply — MUST PAUSE FOR INPUT
+  return { nextNodeId: '', pauseForInput: true, output: { wamid, buttons: buttons.map((b) => b.title) } };
 }
 
 // ─── LIST NODE ───────────────────────────────────────────────────────────────
 
-async function executeListNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId }) {
+async function executeListNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId }) {
   const bodyText = node.content || node.title || 'Please select an option:';
-  const items = (node.listItems || []).slice(0, 10); // WhatsApp max 10 items
+  const items = (node.listItems || []).slice(0, 10);
 
   if (items.length === 0) {
-    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId });
+    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
   }
 
+  let sentResult = null;
   try {
     const { sendMetaWhatsAppMessage } = await import('@/lib/metaWhatsAppService');
-    const sentResult = await sendMetaWhatsAppMessage({
+    sentResult = await sendMetaWhatsAppMessage({
       phoneNumberId, accessToken, to: targetPhone,
       type: 'interactive',
       payload: {
@@ -508,7 +674,7 @@ async function executeListNode({ node, phoneNumberId, accessToken, targetPhone, 
               {
                 title: 'Options',
                 rows: items.map((item, idx) => ({
-                  id: item.id || `list_${idx}`,
+                  id: item.id || item.nextNodeId || `list_${idx}`,
                   title: (item.title || `Option ${idx + 1}`).substring(0, 24),
                   description: (item.description || '').substring(0, 72),
                 })),
@@ -517,113 +683,173 @@ async function executeListNode({ node, phoneNumberId, accessToken, targetPhone, 
           },
         },
       },
+      companyId, conversationId: conversation._id, traceId,
     });
-
-    const wamid = sentResult?.messages?.[0]?.id || `bot_list_${Date.now()}`;
-    const savedMsg = await saveOutboundMessage({
-      companyId, conversationId: conversation._id, contactId: contact._id,
-      wamid, messageType: 'interactive', body: bodyText,
-    });
-    socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
-    await updateConversationLastMessage(conversation._id, bodyText, 'interactive');
-    return { nextNodeId: '', output: { wamid } };
   } catch (err) {
-    console.warn('[ChatbotEngine] List node failed, text fallback:', err.message);
-    const fallbackText = `${bodyText}\n\n${items.map((item, i) => `${i + 1}. ${item.title}`).join('\n')}`;
-    await sendMetaText({ phoneNumberId, accessToken, to: targetPhone, text: fallbackText }).catch(() => {});
-    return { nextNodeId: node.nextNodeId, output: { fallback: true } };
+    const fallbackText = `${bodyText}\n\n${items.map((it, i) => `${i + 1}. ${it.title}`).join('\n')}`;
+    sentResult = { messages: [{ id: `bot_lst_${Date.now()}` }] };
+    try {
+      await sendMetaText({ phoneNumberId, accessToken, to: targetPhone, text: fallbackText, companyId, conversationId: conversation._id, traceId });
+    } catch (e) {
+      // Ignore
+    }
   }
+
+  const wamid = sentResult?.messages?.[0]?.id || `bot_lst_${Date.now()}`;
+  const savedMsg = await saveOutboundMessage({
+    companyId, conversationId: conversation._id, contactId: contact._id,
+    wamid, messageType: 'interactive', body: bodyText,
+  });
+  socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+  await updateConversationLastMessage(conversation._id, bodyText, 'interactive');
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'list', listItems: items.map((i) => i.title) },
+  });
+
+  return { nextNodeId: '', pauseForInput: true, output: { wamid, items: items.map((i) => i.title) } };
 }
 
 // ─── MEDIA NODE ──────────────────────────────────────────────────────────────
 
-async function executeMediaNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId }) {
-  if (!node.mediaUrl) {
-    return { nextNodeId: node.nextNodeId, output: { skipped: true, reason: 'No mediaUrl' } };
+async function executeMediaNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId }) {
+  const mediaUrl = node.mediaUrl || node.url || '';
+  const mediaType = node.mediaType || 'image';
+  const caption = node.caption || node.content || '';
+
+  if (!mediaUrl) {
+    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
   }
 
-  try {
-    const { sendMetaMedia } = await import('@/lib/metaWhatsAppService');
-    const mediaType = node.type === 'media' ? 'image' : 'document';
-    await sendMetaMedia({
-      phoneNumberId, accessToken, to: targetPhone,
-      type: mediaType, mediaUrl: node.mediaUrl,
-      caption: node.content || '',
-    });
+  const { sendMetaMedia } = await import('@/lib/metaWhatsAppService');
+  const sentResult = await sendMetaMedia({
+    phoneNumberId, accessToken, to: targetPhone, type: mediaType, mediaUrl, caption, companyId, conversationId: conversation._id, traceId,
+  });
 
-    const savedMsg = await saveOutboundMessage({
-      companyId, conversationId: conversation._id, contactId: contact._id,
-      wamid: `bot_media_${Date.now()}`, messageType: mediaType, body: node.content || `[${mediaType.toUpperCase()}]`,
-      mediaUrl: node.mediaUrl,
-    });
-    socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
-    await updateConversationLastMessage(conversation._id, node.content || `[Media]`, mediaType);
-  } catch (err) {
-    console.warn('[ChatbotEngine] Media node error:', err.message);
+  const wamid = sentResult?.messages?.[0]?.id || `bot_med_${Date.now()}`;
+  const savedMsg = await saveOutboundMessage({
+    companyId, conversationId: conversation._id, contactId: contact._id,
+    wamid, messageType: mediaType, mediaUrl, mediaCaption: caption, body: caption || `[${mediaType.toUpperCase()}]`,
+  });
+  socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'media', mediaType },
+  });
+
+  return { nextNodeId: node.nextNodeId, output: { wamid, mediaUrl } };
+}
+
+// ─── TEMPLATE NODE ───────────────────────────────────────────────────────────
+
+async function executeTemplateNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId }) {
+  const templateName = node.templateName || '';
+  const languageCode = node.languageCode || 'en';
+
+  if (!templateName) {
+    return executeTextNode({ node, phoneNumberId, accessToken, targetPhone, conversation, contact, companyId, traceId });
   }
 
-  return { nextNodeId: node.nextNodeId, output: { mediaUrl: node.mediaUrl } };
+  const sentResult = await sendMetaTemplate({
+    phoneNumberId, accessToken, to: targetPhone, templateName, languageCode, components: node.components || [], companyId, conversationId: conversation._id, traceId,
+  });
+
+  const wamid = sentResult?.messages?.[0]?.id || `bot_tpl_${Date.now()}`;
+  const savedMsg = await saveOutboundMessage({
+    companyId, conversationId: conversation._id, contactId: contact._id,
+    wamid, messageType: 'template', body: `[Template: ${templateName}]`,
+  });
+  socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'template', templateName },
+  });
+
+  return { nextNodeId: node.nextNodeId, output: { wamid, templateName } };
 }
 
 // ─── CONDITION NODE ──────────────────────────────────────────────────────────
 
-async function executeConditionNode({ node, incomingText, contact, session }) {
-  const cond = node.condition || {};
-  const operator = cond.operator || 'equals';
-  const value = (cond.value || '').toLowerCase();
-  const incoming = normalizeText(incomingText);
+function executeConditionNode({ node, incomingText }) {
+  const operand = normalizeText(incomingText);
+  const target = normalizeText(node.conditionValue || node.value || '');
+  const operator = node.operator || 'equals';
 
-  // Evaluate condition
-  let result = false;
-  switch (operator) {
-    case 'equals':
-      result = incoming === value;
-      break;
-    case 'contains':
-      result = incoming.includes(value);
-      break;
-    case 'starts_with':
-      result = incoming.startsWith(value);
-      break;
-    case 'ends_with':
-      result = incoming.endsWith(value);
-      break;
-    default:
-      result = incoming === value;
-  }
+  let match = false;
+  if (operator === 'equals') match = operand === target;
+  else if (operator === 'contains') match = operand.includes(target);
+  else if (operator === 'starts_with') match = operand.startsWith(target);
 
-  const nextNodeId = result ? cond.trueNextNodeId : cond.falseNextNodeId;
-  return { nextNodeId, output: { conditionResult: result, operator, value } };
+  const nextNodeId = match ? (node.trueNextNodeId || node.nextNodeId) : (node.falseNextNodeId || node.elseNodeId || '');
+  return { nextNodeId, output: { match, operator, target } };
 }
 
-// ─── HTTP REQUEST NODE ───────────────────────────────────────────────────────
+// ─── HANDOFF NODE ────────────────────────────────────────────────────────────
 
-async function executeHttpNode({ node, contact, conversation }) {
-  const url = node.webhookUrl;
-  if (!url) return { nextNodeId: node.nextNodeId, output: { skipped: true } };
-
-  try {
-    const response = await axios.post(url, {
-      contact: { phone: contact.phone, name: contact.name, waId: contact.waId },
-      conversationId: conversation._id.toString(),
-      timestamp: new Date().toISOString(),
-    }, { timeout: 5000 });
-
-    return { nextNodeId: node.nextNodeId, output: { statusCode: response.status, data: response.data } };
-  } catch (err) {
-    console.warn('[ChatbotEngine] HTTP node error:', err.message);
-    return { nextNodeId: node.nextNodeId, output: { error: err.message } };
-  }
-}
-
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-
-async function updateConversationLastMessage(conversationId, body, type) {
-  return Conversation.findByIdAndUpdate(conversationId, {
-    lastMessage: body,
-    lastMessageType: type,
-    lastMessageAt: new Date(),
+async function executeHandoffNode({ conversation, companyId }) {
+  await Conversation.findByIdAndUpdate(conversation._id, {
+    status: 'assigned',
+    assignedAgent: null,
   });
+
+  socketService.broadcastToCompany(companyId.toString(), 'CONVERSATION_TRANSFERRED', {
+    conversationId: conversation._id,
+    status: 'assigned',
+  });
+
+  return { pauseSession: true, pauseReason: 'Agent handoff node reached', nextNodeId: '' };
 }
 
-export default { triggerChatbotEngine };
+// ─── RAG AI NODE ─────────────────────────────────────────────────────────────
+
+async function executeRagAiNode({ node, incomingText, companyId, conversation, contact, phoneNumberId, accessToken, targetPhone, traceId }) {
+  let answer = '';
+  try {
+    const ragResult = await ragEngine.generateGroundedResponse({
+      companyId,
+      query: incomingText,
+      conversationId: conversation._id.toString(),
+    });
+    answer = ragResult?.answer || 'I am an AI assistant. How can I help you?';
+  } catch (e) {
+    answer = 'I am currently unable to answer that request. An agent will assist you shortly.';
+  }
+
+  const sentResult = await sendMetaText({
+    phoneNumberId, accessToken, to: targetPhone, text: answer, companyId, conversationId: conversation._id, traceId,
+  });
+
+  const wamid = sentResult?.messages?.[0]?.id || `rag_node_${Date.now()}`;
+  const savedMsg = await saveOutboundMessage({
+    companyId, conversationId: conversation._id, contactId: contact._id,
+    wamid, messageType: 'text', body: answer,
+  });
+  socketService.broadcastToCompany(companyId.toString(), 'NEW_MESSAGE_RECEIVED', savedMsg);
+  await updateConversationLastMessage(conversation._id, answer, 'text');
+
+  logChatbotTrace({
+    traceId,
+    stage: 'CHATBOT_RESPONSE_SENT',
+    companyId,
+    conversationId: conversation._id,
+    waId: targetPhone,
+    metadata: { metaMessageId: wamid, nodeType: 'rag_ai' },
+  });
+
+  return { nextNodeId: node.nextNodeId, output: { wamid, answer } };
+}

@@ -219,12 +219,7 @@ export const handleWebhookEvent = async (req, res) => {
         await conversation.save();
       }
 
-      let messageBody = '';
-      let mediaUrl = '';
-      let mediaCaption = '';
-      let filename = '';
-      let locationData = null;
-      let contactCardData = null;
+      let buttonPayloadId = '';
 
       switch (messageType) {
         case 'text':
@@ -268,14 +263,17 @@ export const handleWebhookEvent = async (req, res) => {
           break;
 
         case 'button':
+          buttonPayloadId = incomingMsg.button?.payload || incomingMsg.button?.text || '';
           messageBody = incomingMsg.button?.text || incomingMsg.button?.payload || '[Button Reply]';
           break;
 
         case 'interactive':
           if (incomingMsg.interactive?.type === 'button_reply') {
-            messageBody = incomingMsg.interactive.button_reply.title || '[Interactive Button]';
+            buttonPayloadId = incomingMsg.interactive.button_reply.id || '';
+            messageBody = incomingMsg.interactive.button_reply.title || incomingMsg.interactive.button_reply.id || '[Interactive Button]';
           } else if (incomingMsg.interactive?.type === 'list_reply') {
-            messageBody = incomingMsg.interactive.list_reply.title || '[List Reply]';
+            buttonPayloadId = incomingMsg.interactive.list_reply.id || '';
+            messageBody = incomingMsg.interactive.list_reply.title || incomingMsg.interactive.list_reply.id || '[List Reply]';
           } else {
             messageBody = '[Interactive Reply]';
           }
@@ -362,6 +360,7 @@ export const handleWebhookEvent = async (req, res) => {
             contact,
             incomingText: messageBody,
             messageType,
+            buttonPayloadId,
             traceId,
             webhookStart,
           }),
