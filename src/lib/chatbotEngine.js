@@ -28,6 +28,7 @@ import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
 import { queueService } from '@/lib/queueService';
 import { ragEngine } from '@/lib/ragEngine';
+import { logWhatsAppTrace, logWhatsAppError } from './whatsappTraceLogger.js';
 import axios from 'axios';
 
 const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
@@ -64,19 +65,40 @@ function matchesTrigger(triggerKeyword, incomingText) {
 
 /**
  * Called from webhookController after saving inbound message.
- * Finds matching published workflows and triggers execution asynchronously.
+ * Finds matching published workflows and triggers execution.
  *
- * @param {Object} ctx - { company, conversation, contact, incomingText, messageType }
+ * @param {Object} ctx - { company, conversation, contact, incomingText, messageType, traceId, webhookStart }
  */
 export async function triggerChatbotEngine(ctx) {
-  const { company, conversation, contact, incomingText, messageType } = ctx;
+  const { company, conversation, contact, incomingText, messageType, traceId, webhookStart } = ctx;
+  const companyId = company._id;
+  const phoneNumberId = company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '';
+  const waId = contact.phone || contact.waId;
+
+  logWhatsAppTrace({
+    traceId,
+    stage: 'CHATBOT_TRIGGERED',
+    companyId,
+    phoneNumberId,
+    waId,
+    durationMs: Date.now() - (webhookStart || Date.now()),
+  });
 
   // Only process text messages and button replies for trigger matching
-  if (!['text', 'button', 'interactive'].includes(messageType) && !incomingText) return;
+  if (!['text', 'button', 'interactive'].includes(messageType) && !incomingText) {
+    logWhatsAppTrace({
+      traceId,
+      stage: 'CHATBOT_SKIP',
+      companyId,
+      phoneNumberId,
+      waId,
+      metadata: { reason: 'NON_TEXT_MESSAGE_TYPE', messageType },
+    });
+    return;
+  }
 
   try {
     await connectDB();
-    const companyId = company._id;
 
     // Check if there is an ACTIVE session for this contact (button continuation flow)
     const existingSession = await BotSession.findOne({
@@ -100,31 +122,27 @@ export async function triggerChatbotEngine(ctx) {
               b.id === incomingText
           );
           if (matchedButton && matchedButton.nextNodeId) {
-            // Continue from the mapped node
-            queueService.addJob('automationQueue', 'CHATBOT_EXECUTE', {
-              companyId: companyId.toString(),
-              botFlowId: flow._id.toString(),
-              sessionId: existingSession._id.toString(),
-              startNodeId: matchedButton.nextNodeId,
-              conversationId: conversation._id.toString(),
-              contactId: contact._id.toString(),
-              customerPhone: contact.phone || contact.waId,
-              incomingText,
+            logWhatsAppTrace({
+              traceId,
+              stage: 'CHATBOT_SESSION_CONTINUED',
+              companyId,
+              phoneNumberId,
+              waId,
+              metadata: { flowId: flow._id.toString(), nextNodeId: matchedButton.nextNodeId },
             });
 
-            // Execute immediately asynchronously
-            setImmediate(() =>
-              executeChatbotFlow({
-                companyId,
-                company,
-                flow,
-                session: existingSession,
-                startNodeId: matchedButton.nextNodeId,
-                conversation,
-                contact,
-                incomingText,
-              }).catch((err) => console.error('[ChatbotEngine] Session continuation error:', err))
-            );
+            await executeChatbotFlow({
+              companyId,
+              company,
+              flow,
+              session: existingSession,
+              startNodeId: matchedButton.nextNodeId,
+              conversation,
+              contact,
+              incomingText,
+              traceId,
+              webhookStart,
+            });
             return;
           }
         }
@@ -133,10 +151,39 @@ export async function triggerChatbotEngine(ctx) {
 
     // Find all PUBLISHED workflows matching the trigger keyword for this company
     const activeFlows = await BotFlow.find({ companyId, isActive: true });
-    if (!activeFlows.length) return;
+    if (!activeFlows.length) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'CHATBOT_SKIP',
+        companyId,
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'NO_PUBLISHED_FLOWS' },
+      });
+      return;
+    }
 
     const matchedFlow = activeFlows.find((f) => matchesTrigger(f.triggerKeyword, incomingText));
-    if (!matchedFlow) return;
+    if (!matchedFlow) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'CHATBOT_SKIP',
+        companyId,
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'NO_TRIGGER_MATCH', incomingText },
+      });
+      return;
+    }
+
+    logWhatsAppTrace({
+      traceId,
+      stage: 'CHATBOT_FLOW_MATCHED',
+      companyId,
+      phoneNumberId,
+      waId,
+      metadata: { chatbotId: matchedFlow._id.toString(), flowName: matchedFlow.name },
+    });
 
     // Deactivate any existing sessions for this contact before starting new one
     await BotSession.updateMany(
@@ -158,22 +205,41 @@ export async function triggerChatbotEngine(ctx) {
 
     // Find the START node (first node in nodes array)
     const startNode = matchedFlow.nodes[0];
-    if (!startNode) return;
-
-    // Execute asynchronously - never block webhook
-    setImmediate(() =>
-      executeChatbotFlow({
+    if (!startNode) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'CHATBOT_SKIP',
         companyId,
-        company,
-        flow: matchedFlow,
-        session,
-        startNodeId: startNode.id,
-        conversation,
-        contact,
-        incomingText,
-      }).catch((err) => console.error('[ChatbotEngine] Flow execution error:', err))
-    );
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'NO_START_NODE' },
+      });
+      return;
+    }
+
+    // Execute flow directly (Guarantees Vercel Serverless execution)
+    await executeChatbotFlow({
+      companyId,
+      company,
+      flow: matchedFlow,
+      session,
+      startNodeId: startNode.id,
+      conversation,
+      contact,
+      incomingText,
+      traceId,
+      webhookStart,
+    });
   } catch (err) {
+    logWhatsAppError({
+      traceId,
+      stage: 'CHATBOT_ENGINE_EXCEPTION',
+      companyId,
+      phoneNumberId,
+      waId,
+      errorCode: 'ENGINE_EXCEPTION',
+      errorMessage: err.message,
+    });
     console.error('[ChatbotEngine] triggerChatbotEngine error:', err.message);
   }
 }

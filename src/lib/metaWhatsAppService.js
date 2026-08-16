@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logWhatsAppTrace, logWhatsAppError } from './whatsappTraceLogger.js';
 
 const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
 const GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -29,9 +30,9 @@ export function resolveWhatsAppCredentials({ company, conversation, overridePhon
     '';
 
   const resolvedAccessToken =
-    company?.accessToken ||
     company?.whatsappConfig?.accessToken ||
-    (!company?.wabaId && !company?.phoneNumberId ? process.env.META_ACCESS_TOKEN : '') ||
+    company?.metaAccessToken ||
+    process.env.META_ACCESS_TOKEN ||
     '';
 
   return {
@@ -42,11 +43,9 @@ export function resolveWhatsAppCredentials({ company, conversation, overridePhon
 }
 
 /**
- * Send Outbound WhatsApp Message via Meta Cloud API
- *
- * CRITICAL:
- * - Uses POST /{resolvedPhoneNumberId}/messages
- * - Logs safe details (companyId, conversationId, resolvedPhoneNumberId, recipientWaId, WABA ID)
+ * Core primitive function for dispatching Meta Cloud API WhatsApp messages.
+ * - Enforces strict tenant payload formatting.
+ * - Returns Graph API response object.
  * - Never logs access tokens or secrets.
  */
 export async function sendMetaWhatsAppMessage({
@@ -58,18 +57,31 @@ export async function sendMetaWhatsAppMessage({
   companyId,
   conversationId,
   wabaId,
+  traceId,
 }) {
   if (!phoneNumberId || !accessToken) {
+    logWhatsAppError({
+      traceId,
+      stage: 'OUTBOUND_SEND_FAILED',
+      companyId,
+      phoneNumberId,
+      errorCode: 'MISSING_CREDENTIALS',
+      errorMessage: 'Meta WhatsApp credentials missing (Phone Number ID or Access Token)',
+    });
     throw new Error('Meta WhatsApp credentials missing (Phone Number ID or Access Token)');
   }
 
   const cleanPhone = to.replace(/[^0-9]/g, '');
   const endpoint = `${GRAPH_URL}/${phoneNumberId}/messages`;
 
-  // Safe structured log (Never log access tokens or secrets)
-  console.log(
-    `[Outbound WhatsApp] companyId: ${companyId || 'N/A'} | conversationId: ${conversationId || 'N/A'} | resolvedPhoneNumberId: ${phoneNumberId} | recipientWaId: ${cleanPhone} | WABA ID: ${wabaId || 'N/A'}`
-  );
+  logWhatsAppTrace({
+    traceId,
+    stage: 'OUTBOUND_SEND_STARTED',
+    companyId,
+    phoneNumberId,
+    waId: cleanPhone,
+    metadata: { type, tokenPresent: !!accessToken },
+  });
 
   const requestData = {
     messaging_product: 'whatsapp',
@@ -91,17 +103,34 @@ export async function sendMetaWhatsAppMessage({
     });
 
     const sendDuration = Date.now() - sendStart;
-    console.log(
-      `[Outbound WhatsApp Sent] durationMs=${sendDuration}ms | resolvedPhoneNumberId=${phoneNumberId} | recipientWaId=${cleanPhone} | messageId=${response.data?.messages?.[0]?.id || 'N/A'}`
-    );
+    const metaMsgId = response.data?.messages?.[0]?.id || 'N/A';
+
+    logWhatsAppTrace({
+      traceId,
+      stage: 'OUTBOUND_SEND_COMPLETED',
+      companyId,
+      phoneNumberId,
+      waId: cleanPhone,
+      durationMs: sendDuration,
+      metadata: { metaMessageId: metaMsgId },
+    });
 
     return response.data;
   } catch (error) {
     const sendDuration = Date.now() - sendStart;
-    const errObj = error.response?.data?.error || { message: error.message, code: error.code };
-    console.error(
-      `[WhatsApp Outbound Error] durationMs=${sendDuration}ms | companyId=${companyId || 'N/A'} | resolvedPhoneNumberId=${phoneNumberId} | errorCode=${errObj.code || 'HTTP_ERROR'} | errorMessage="${errObj.message}"`
-    );
+    const errObj = error.response?.data?.error || { message: error.message, code: error.code, error_subcode: error.error_subcode };
+
+    logWhatsAppError({
+      traceId,
+      stage: 'OUTBOUND_SEND_FAILED',
+      companyId,
+      phoneNumberId,
+      waId: cleanPhone,
+      errorCode: errObj.code || errObj.status || 'HTTP_ERROR',
+      errorMessage: errObj.message || 'Failed to send WhatsApp message via Meta Cloud API',
+      durationMs: sendDuration,
+    });
+
     throw new Error(errObj.message || 'Failed to send WhatsApp message via Meta Cloud API');
   }
 }
@@ -109,7 +138,7 @@ export async function sendMetaWhatsAppMessage({
 /**
  * Send Text Message
  */
-export async function sendMetaText({ phoneNumberId, accessToken, to, text, companyId, conversationId, wabaId }) {
+export async function sendMetaText({ phoneNumberId, accessToken, to, text, companyId, conversationId, wabaId, traceId }) {
   return sendMetaWhatsAppMessage({
     phoneNumberId,
     accessToken,
@@ -121,6 +150,7 @@ export async function sendMetaText({ phoneNumberId, accessToken, to, text, compa
     companyId,
     conversationId,
     wabaId,
+    traceId,
   });
 }
 

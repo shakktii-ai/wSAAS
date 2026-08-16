@@ -7,7 +7,7 @@ import WebhookLog from '@/models/WebhookLog';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 import { triggerAutomationEngine } from '@/lib/automationEngine';
 import { socketService } from '@/lib/socketService';
-import { latencyTracker } from '@/lib/latencyTracker';
+import { logWhatsAppTrace, logWhatsAppError } from '@/lib/whatsappTraceLogger';
 
 /**
  * Webhook Verification Handler (GET)
@@ -17,14 +17,14 @@ export const verifyWebhook = async (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026';
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'syncchat_webhook_verify_token_secure_2026-27';
 
   if (mode && token) {
     if (
       mode === 'subscribe' &&
       (token === expectedToken ||
         token === 'syncchat_verify' ||
-        token === 'syncchat_webhook_verify_token_secure_2026' ||
+        token === 'syncchat_webhook_verify_token_secure_2026-27' ||
         token === 'syncchat_webhook_verify_token_secure_2026-27')
     ) {
       console.log('Meta Webhook Verified Successfully');
@@ -40,23 +40,24 @@ export const verifyWebhook = async (req, res) => {
 
 /**
  * Inbound Webhook Event Handler (POST) - Phase 6
+ * Awaits downstream automation/chatbot engines to guarantee Vercel Serverless execution
  */
 export const handleWebhookEvent = async (req, res) => {
+  const webhookStart = Date.now();
   try {
     await connectDB();
     const body = req.body;
 
-    // Fast 200 OK acknowledgment to Meta Graph API
-    res.status(200).json({ status: 'EVENT_RECEIVED' });
-
     if (!body || body.object !== 'whatsapp_business_account') {
-      return;
+      return res.status(200).json({ status: 'IGNORED_NON_WHATSAPP_EVENT' });
     }
 
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0]?.value;
 
-    if (!change) return;
+    if (!change) {
+      return res.status(200).json({ status: 'NO_CHANGE_VALUE' });
+    }
 
     // 1. Extract phoneNumberId safely from metadata
     const phoneNumberId = change.metadata?.phone_number_id;
@@ -144,12 +145,31 @@ export const handleWebhookEvent = async (req, res) => {
 
       const waId = contactObj?.wa_id || incomingMsg.from;
       const customerPhone = incomingMsg.from || waId;
+      const customerName = contactObj?.profile?.name || waId;
       const metaMessageId = incomingMsg.id;
       const messageType = incomingMsg.type || 'text';
 
-      const trace = latencyTracker.createTrace(metaMessageId, company._id, phoneNumberId);
-      trace.logStage('WEBHOOK_RECEIVED');
-      trace.logStage('TENANT_RESOLVED', { companyId: company._id.toString() });
+      const traceId = metaMessageId ? `WHATSAPP_${metaMessageId}` : `WHATSAPP_${Date.now()}`;
+
+      logWhatsAppTrace({
+        traceId,
+        stage: 'WEBHOOK_RECEIVED',
+        companyId: company._id,
+        phoneNumberId,
+        waId,
+        messageId: metaMessageId,
+        durationMs: Date.now() - webhookStart,
+      });
+
+      logWhatsAppTrace({
+        traceId,
+        stage: 'TENANT_RESOLVED',
+        companyId: company._id,
+        phoneNumberId,
+        waId,
+        messageId: metaMessageId,
+        durationMs: Date.now() - webhookStart,
+      });
 
       // Auto-create Contact if does not exist
       let contact = await Contact.findOne({ companyId: company._id, waId });
@@ -296,6 +316,16 @@ export const handleWebhookEvent = async (req, res) => {
           timestamp: new Date(),
         });
 
+        logWhatsAppTrace({
+          traceId,
+          stage: 'MESSAGE_SAVED',
+          companyId: company._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          durationMs: Date.now() - webhookStart,
+        });
+
         // Update Conversation Last Message & Unread Count
         conversation.lastMessage = messageBody;
         conversation.lastMessageType = messageType;
@@ -303,38 +333,66 @@ export const handleWebhookEvent = async (req, res) => {
         conversation.unreadCount = (conversation.unreadCount || 0) + 1;
         await conversation.save();
 
-        if (trace) trace.logStage('CONVERSATION_UPDATED', { conversationId: conversation._id.toString() });
-
-        // ─── LIVE CHATBOT ENGINE TRIGGER ───────────────────────────────
-        if (trace) trace.logStage('CHATBOT_TRIGGERED');
-        triggerChatbotEngine({
-          company,
-          conversation,
-          contact,
-          incomingText: messageBody,
-          messageType,
-          trace,
-        }).catch((err) => {
-          if (trace) trace.logError('CHATBOT_TRIGGER_FAILED', err);
-          console.error('[Webhook] ChatbotEngine trigger error:', err.message);
+        logWhatsAppTrace({
+          traceId,
+          stage: 'CONVERSATION_UPDATED',
+          companyId: company._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          durationMs: Date.now() - webhookStart,
+          metadata: { conversationId: conversation._id.toString() },
         });
-        // ────────────────────────────────────────────────────────────────
 
-        // ─── LIVE AUTOMATION ENGINE TRIGGER ───────────────────────────
-        if (trace) trace.logStage('AUTOMATION_TRIGGERED');
-        triggerAutomationEngine({
-          company,
-          conversation,
-          contact,
-          incomingText: messageBody,
-          messageType,
-          wamid: metaMessageId,
-          trace,
-        }).catch((err) => {
-          if (trace) trace.logError('AUTOMATION_TRIGGER_FAILED', err);
-          console.error('[Webhook] AutomationEngine trigger error:', err.message);
+        // ─── AWAIT DOWNSTREAM ENGINES (Guarantees Vercel Serverless Execution) ───
+        logWhatsAppTrace({
+          traceId,
+          stage: 'ENGINES_EXECUTION_STARTED',
+          companyId: company._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          durationMs: Date.now() - webhookStart,
         });
-        // ────────────────────────────────────────────────────────────────
+
+        const engineResults = await Promise.allSettled([
+          triggerChatbotEngine({
+            company,
+            conversation,
+            contact,
+            incomingText: messageBody,
+            messageType,
+            traceId,
+            webhookStart,
+          }),
+          triggerAutomationEngine({
+            company,
+            conversation,
+            contact,
+            incomingText: messageBody,
+            messageType,
+            wamid: metaMessageId,
+            traceId,
+            webhookStart,
+          }),
+        ]);
+
+        engineResults.forEach((res, idx) => {
+          if (res.status === 'rejected') {
+            logWhatsAppError({
+              traceId,
+              stage: idx === 0 ? 'CHATBOT_ENGINE_FAILED' : 'AUTOMATION_ENGINE_FAILED',
+              companyId: company._id,
+              phoneNumberId,
+              waId,
+              messageId: metaMessageId,
+              errorCode: 'ENGINE_REJECTED',
+              errorMessage: res.reason?.message || String(res.reason),
+              durationMs: Date.now() - webhookStart,
+            });
+          }
+        });
+        // ──────────────────────────────────────────────────────────────────────────
       }
 
       await WebhookLog.create({
@@ -344,9 +402,27 @@ export const handleWebhookEvent = async (req, res) => {
         payload: body,
         status: 'PROCESSED',
       });
+
+      logWhatsAppTrace({
+        traceId,
+        stage: 'WEBHOOK_COMPLETED',
+        companyId: company._id,
+        phoneNumberId,
+        waId,
+        messageId: metaMessageId,
+        durationMs: Date.now() - webhookStart,
+      });
     }
+
+    return res.status(200).json({ status: 'EVENT_RECEIVED' });
   } catch (error) {
-    console.error('Webhook Event Error:', error);
+    logWhatsAppError({
+      traceId: req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.id ? `WHATSAPP_${req.body.entry[0].changes[0].value.messages[0].id}` : 'WHATSAPP_UNKNOWN',
+      stage: 'WEBHOOK_FATAL_ERROR',
+      errorCode: 'WEBHOOK_EXCEPTION',
+      errorMessage: error.message,
+      durationMs: Date.now() - webhookStart,
+    });
     try {
       await WebhookLog.create({
         companyId: null,
@@ -359,6 +435,7 @@ export const handleWebhookEvent = async (req, res) => {
     } catch (e) {
       // Ignore
     }
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 

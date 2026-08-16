@@ -38,6 +38,7 @@ import { saveOutboundMessage } from '@/lib/outboundMessageService';
 import { socketService } from '@/lib/socketService';
 import { redisService } from '@/lib/redisService';
 import { queueService } from '@/lib/queueService';
+import { logWhatsAppTrace, logWhatsAppError } from './whatsappTraceLogger.js';
 import axios from 'axios';
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -72,12 +73,6 @@ function matchesTrigger(flow, incomingText) {
 
 // ─── GRAPH HELPERS ────────────────────────────────────────────────────────────
 
-/**
- * Given a flow's edges and sourceNodeId (+optional sourceHandle),
- * return the target node id for the next step.
- *
- * For condition nodes, sourceHandle is 'true' or 'false'.
- */
 function getNextNodeId(flow, currentNodeId, sourceHandle = null) {
   const edge = flow.edges.find(
     (e) =>
@@ -87,16 +82,10 @@ function getNextNodeId(flow, currentNodeId, sourceHandle = null) {
   return edge?.target || null;
 }
 
-/**
- * Find the START node of a flow.
- */
 function findStartNode(flow) {
   return flow.nodes.find((n) => n.type === 'start') || flow.nodes[0] || null;
 }
 
-/**
- * Find a node by its id.
- */
 function findNode(flow, nodeId) {
   return flow.nodes.find((n) => n.id === nodeId) || null;
 }
@@ -105,39 +94,58 @@ function findNode(flow, nodeId) {
 
 /**
  * Called from webhookController after saving inbound message.
- * Fire-and-forget — webhook has already returned HTTP 200.
+ * Finds matching published AutomationFlows and executes them directly.
  *
- * @param {Object} ctx
- *   company      - Company document
- *   conversation - Conversation document
- *   contact      - Contact document
- *   incomingText - Parsed message body
- *   messageType  - e.g. 'text', 'button', 'interactive'
- *   wamid        - Meta message ID (for deduplication)
+ * @param {Object} ctx - { company, conversation, contact, incomingText, messageType, wamid, traceId, webhookStart }
  */
 export async function triggerAutomationEngine(ctx) {
-  const { company, conversation, contact, incomingText, messageType, wamid } = ctx;
+  const { company, conversation, contact, incomingText, messageType, wamid, traceId, webhookStart } = ctx;
+  const companyId = company._id;
+  const phoneNumberId = company.phoneNumberId || company.whatsappConfig?.phoneNumberId || '';
+  const waId = contact.waId || contact.phone;
+
+  logWhatsAppTrace({
+    traceId,
+    stage: 'AUTOMATION_TRIGGERED',
+    companyId,
+    phoneNumberId,
+    waId,
+    durationMs: Date.now() - (webhookStart || Date.now()),
+  });
 
   // Only process text-bearing messages for keyword matching
-  if (!incomingText) return;
+  if (!incomingText) {
+    logWhatsAppTrace({
+      traceId,
+      stage: 'AUTOMATION_SKIP',
+      companyId,
+      phoneNumberId,
+      waId,
+      metadata: { reason: 'NO_INCOMING_TEXT' },
+    });
+    return;
+  }
 
   try {
     await connectDB();
-    const companyId = company._id;
-    const waId = contact.waId || contact.phone;
 
     // ── Deduplication ─────────────────────────────────────────────────────
-    // Prevent the same WAMID from triggering automations twice
     if (wamid) {
       const dedupKey = `auto:dedup:${wamid}`;
       const already = await redisService.get(dedupKey);
-      if (already) return;
+      if (already) {
+        logWhatsAppTrace({
+          traceId,
+          stage: 'AUTOMATION_SKIP',
+          companyId,
+          phoneNumberId,
+          waId,
+          metadata: { reason: 'DUPLICATE_WAMID', wamid },
+        });
+        return;
+      }
       await redisService.set(dedupKey, '1', 120);
     }
-
-    // ── Check for active paused session (delay resume via direct message) ──
-    // (Delay resume is primarily handled by BullMQ, but if a customer sends
-    // a message mid-delay, we leave the session paused and let BullMQ resume)
 
     // ── Find all published AutomationFlows for this company ───────────────
     const publishedFlows = await AutomationFlow.find({
@@ -145,19 +153,55 @@ export async function triggerAutomationEngine(ctx) {
       status: 'PUBLISHED',
     }).lean();
 
-    if (!publishedFlows.length) return;
+    if (!publishedFlows.length) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'AUTOMATION_SKIP',
+        companyId,
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'NO_PUBLISHED_FLOWS' },
+      });
+      return;
+    }
 
     // ── Match trigger keyword ─────────────────────────────────────────────
     const matchedFlow = publishedFlows.find((f) => matchesTrigger(f, incomingText));
-    if (!matchedFlow) return;
+    if (!matchedFlow) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'AUTOMATION_SKIP',
+        companyId,
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'NO_TRIGGER_MATCH', incomingText },
+      });
+      return;
+    }
 
-    const { trace } = ctx;
-    if (trace) trace.logStage('AUTOMATION_RULE_MATCHED', { automationId: matchedFlow._id.toString() });
+    logWhatsAppTrace({
+      traceId,
+      stage: 'AUTOMATION_RULE_MATCHED',
+      companyId,
+      phoneNumberId,
+      waId,
+      metadata: { automationId: matchedFlow._id.toString(), flowName: matchedFlow.name },
+    });
 
     // ── Prevent concurrent duplicate sessions for the same contact+flow ───
     const deduplicateKey = `auto:session:${companyId}:${waId}:${matchedFlow._id}`;
     const sessionRunning = await redisService.get(deduplicateKey);
-    if (sessionRunning) return;
+    if (sessionRunning) {
+      logWhatsAppTrace({
+        traceId,
+        stage: 'AUTOMATION_SKIP',
+        companyId,
+        phoneNumberId,
+        waId,
+        metadata: { reason: 'SESSION_ALREADY_RUNNING', deduplicateKey },
+      });
+      return;
+    }
     await redisService.set(deduplicateKey, '1', 30); // 30 sec guard window
 
     // ── Create AutomationSession ──────────────────────────────────────────
@@ -182,9 +226,9 @@ export async function triggerAutomationEngine(ctx) {
       triggerMessage: incomingText,
     });
 
-    // ── Execute asynchronously, never block webhook ───────────────────────
-    setImmediate(() =>
-      executeFlowFromNode({
+    // ── Execute directly (Guarantees Vercel Serverless execution) ──────────
+    try {
+      await executeFlowFromNode({
         companyId,
         company,
         flow: matchedFlow,
@@ -194,14 +238,26 @@ export async function triggerAutomationEngine(ctx) {
         contact,
         incomingText,
         deduplicateKey,
-        trace,
-      }).catch((err) => {
-        if (trace) trace.logError('AUTOMATION_EXECUTION_FAILED', err);
-        console.error('[AutomationEngine] Execution error:', err.message);
-      })
-    );
+        traceId,
+        webhookStart,
+      });
+    } finally {
+      // Always release lock unless paused for an intentional delay node
+      const currentSession = await AutomationSession.findById(session._id).lean();
+      if (!currentSession?.pausedForDelay) {
+        await redisService.del(deduplicateKey);
+      }
+    }
   } catch (err) {
-    if (ctx.trace) ctx.trace.logError('TRIGGER_AUTOMATION_FAILED', err);
+    logWhatsAppError({
+      traceId,
+      stage: 'AUTOMATION_ENGINE_EXCEPTION',
+      companyId,
+      phoneNumberId,
+      waId,
+      errorCode: 'AUTOMATION_EXCEPTION',
+      errorMessage: err.message,
+    });
     console.error('[AutomationEngine] triggerAutomationEngine error:', err.message);
   }
 }
@@ -247,7 +303,7 @@ export async function resumeAutomationSession(sessionId, nextNodeId) {
 
 // ─── FLOW EXECUTOR ────────────────────────────────────────────────────────────
 
-async function executeFlowFromNode({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText, deduplicateKey, trace }) {
+async function executeFlowFromNode({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText, deduplicateKey, traceId, webhookStart }) {
   const flowStart = Date.now();
   const executedSteps = [];
 
