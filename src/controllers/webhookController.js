@@ -219,208 +219,269 @@ export const handleWebhookEvent = async (req, res) => {
         await conversation.save();
       }
 
+      let currentStage = 'AFTER_TENANT_RESOLVED';
+      let messageBody = '';
+      let mediaUrl = '';
+      let mediaCaption = '';
+      let filename = '';
+      let locationData = null;
+      let contactCardData = null;
       let buttonPayloadId = '';
 
-      switch (messageType) {
-        case 'text':
-          messageBody = incomingMsg.text?.body || '';
-          break;
+      try {
+        currentStage = 'BEFORE_MESSAGE_EXTRACTION';
+        logWhatsAppTrace({
+          traceId,
+          stage: 'BEFORE_MESSAGE_EXTRACTION',
+          companyId: company._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          durationMs: Date.now() - webhookStart,
+        });
 
-        case 'image':
-        case 'video':
-        case 'document':
-        case 'audio':
-        case 'sticker':
-          mediaUrl = incomingMsg[messageType]?.link || incomingMsg[messageType]?.id || '';
-          mediaCaption = incomingMsg[messageType]?.caption || '';
-          filename = incomingMsg[messageType]?.filename || '';
-          messageBody = mediaCaption || `[Inbound ${messageType.toUpperCase()}]`;
-          if (contact) contact.mediaCount = (contact.mediaCount || 0) + 1;
-          break;
+        switch (messageType) {
+          case 'text':
+            messageBody = incomingMsg.text?.body || '';
+            break;
 
-        case 'location':
-          locationData = {
-            latitude: incomingMsg.location?.latitude,
-            longitude: incomingMsg.location?.longitude,
-            name: incomingMsg.location?.name || 'Shared Location',
-            address: incomingMsg.location?.address || '',
-          };
-          messageBody = `📍 Location: ${locationData.name || locationData.address || `${locationData.latitude}, ${locationData.longitude}`}`;
-          break;
+          case 'image':
+          case 'video':
+          case 'document':
+          case 'audio':
+          case 'sticker':
+            mediaUrl = incomingMsg[messageType]?.link || incomingMsg[messageType]?.id || '';
+            mediaCaption = incomingMsg[messageType]?.caption || '';
+            filename = incomingMsg[messageType]?.filename || '';
+            messageBody = mediaCaption || `[Inbound ${messageType.toUpperCase()}]`;
+            if (contact) contact.mediaCount = (contact.mediaCount || 0) + 1;
+            break;
 
-        case 'contacts':
-          if (incomingMsg.contacts?.[0]) {
-            const c = incomingMsg.contacts[0];
-            contactCardData = {
-              name: c.name?.formatted_name || c.name?.first_name || 'Shared Contact',
-              phone: c.phones?.[0]?.phone || '',
-              waId: c.phones?.[0]?.wa_id || '',
+          case 'location':
+            locationData = {
+              latitude: incomingMsg.location?.latitude,
+              longitude: incomingMsg.location?.longitude,
+              name: incomingMsg.location?.name || 'Shared Location',
+              address: incomingMsg.location?.address || '',
             };
-            messageBody = `👤 Contact Card: ${contactCardData.name} (${contactCardData.phone})`;
-          } else {
-            messageBody = '[Contact Card]';
-          }
-          break;
+            messageBody = `📍 Location: ${locationData.name || locationData.address || `${locationData.latitude}, ${locationData.longitude}`}`;
+            break;
 
-        case 'button':
-          buttonPayloadId = incomingMsg.button?.payload || incomingMsg.button?.text || '';
-          messageBody = incomingMsg.button?.text || incomingMsg.button?.payload || '[Button Reply]';
-          break;
+          case 'contacts':
+            if (incomingMsg.contacts?.[0]) {
+              const c = incomingMsg.contacts[0];
+              contactCardData = {
+                name: c.name?.formatted_name || c.name?.first_name || 'Shared Contact',
+                phone: c.phones?.[0]?.phone || '',
+                waId: c.phones?.[0]?.wa_id || '',
+              };
+              messageBody = `👤 Contact Card: ${contactCardData.name} (${contactCardData.phone})`;
+            } else {
+              messageBody = '[Contact Card]';
+            }
+            break;
 
-        case 'interactive':
-          if (incomingMsg.interactive?.type === 'button_reply') {
-            buttonPayloadId = incomingMsg.interactive.button_reply.id || '';
-            messageBody = incomingMsg.interactive.button_reply.title || incomingMsg.interactive.button_reply.id || '[Interactive Button]';
-          } else if (incomingMsg.interactive?.type === 'list_reply') {
-            buttonPayloadId = incomingMsg.interactive.list_reply.id || '';
-            messageBody = incomingMsg.interactive.list_reply.title || incomingMsg.interactive.list_reply.id || '[List Reply]';
-          } else {
-            messageBody = '[Interactive Reply]';
-          }
-          break;
+          case 'button':
+            buttonPayloadId = incomingMsg.button?.payload || incomingMsg.button?.text || '';
+            messageBody = incomingMsg.button?.text || incomingMsg.button?.payload || '[Button Reply]';
+            break;
 
-        default:
-          messageBody = `[${messageType.toUpperCase()} Message]`;
-      }
+          case 'interactive':
+            if (incomingMsg.interactive?.type === 'button_reply') {
+              buttonPayloadId = incomingMsg.interactive.button_reply.id || '';
+              messageBody = incomingMsg.interactive.button_reply.title || incomingMsg.interactive.button_reply.id || '[Interactive Button]';
+            } else if (incomingMsg.interactive?.type === 'list_reply') {
+              buttonPayloadId = incomingMsg.interactive.list_reply.id || '';
+              messageBody = incomingMsg.interactive.list_reply.title || incomingMsg.interactive.list_reply.id || '[List Reply]';
+            } else {
+              messageBody = '[Interactive Reply]';
+            }
+            break;
 
-      // Save incoming message (Check duplicate by metaMessageId)
-      const existingMessage = await Message.findOne({
-        $or: [{ metaMessageId }, { wamid: metaMessageId }],
-      });
+          default:
+            messageBody = `[${messageType.toUpperCase()} Message]`;
+        }
 
-      if (!existingMessage) {
-        await Message.create({
-          companyId: company._id,
-          conversationId: conversation._id,
-          metaMessageId,
-          wamid: metaMessageId,
-          direction: 'inbound',
-          senderType: 'customer',
-          sender: {
-            name: customerName,
-            type: 'customer',
-          },
-          messageType,
-          type: messageType,
-          messageBody,
-          body: messageBody,
-          mediaUrl,
-          mediaCaption,
-          filename,
-          location: locationData,
-          contactCard: contactCardData,
-          deliveryStatus: 'delivered',
-          status: 'delivered',
-          timestamp: new Date(),
-        });
-
+        currentStage = 'AFTER_MESSAGE_EXTRACTION';
         logWhatsAppTrace({
           traceId,
-          stage: 'MESSAGE_SAVED',
+          stage: 'AFTER_MESSAGE_EXTRACTION',
           companyId: company._id,
           phoneNumberId,
           waId,
           messageId: metaMessageId,
           durationMs: Date.now() - webhookStart,
+          metadata: { messageType, textPresent: !!messageBody, buttonPayloadPresent: !!buttonPayloadId },
         });
 
-        // Update Conversation Last Message & Unread Count
-        conversation.lastMessage = messageBody;
-        conversation.lastMessageType = messageType;
-        conversation.lastMessageAt = new Date();
-        conversation.unreadCount = (conversation.unreadCount || 0) + 1;
-        await conversation.save();
-
-        logWhatsAppTrace({
-          traceId,
-          stage: 'CONVERSATION_UPDATED',
-          companyId: company._id,
-          phoneNumberId,
-          waId,
-          messageId: metaMessageId,
-          durationMs: Date.now() - webhookStart,
-          metadata: { conversationId: conversation._id.toString() },
+        currentStage = 'MESSAGE_SAVE';
+        // Save incoming message (Check duplicate by metaMessageId)
+        const existingMessage = await Message.findOne({
+          $or: [{ metaMessageId }, { wamid: metaMessageId }],
         });
 
-        // ─── AWAIT DOWNSTREAM ENGINES (Guarantees Vercel Serverless Execution) ───
-        logWhatsAppTrace({
-          traceId,
-          stage: 'ENGINES_EXECUTION_STARTED',
-          companyId: company._id,
-          phoneNumberId,
-          waId,
-          messageId: metaMessageId,
-          durationMs: Date.now() - webhookStart,
-        });
-
-        const engineResults = await Promise.allSettled([
-          triggerChatbotEngine({
-            company,
-            conversation,
-            contact,
-            incomingText: messageBody,
-            messageType,
-            buttonPayloadId,
-            traceId,
-            webhookStart,
-          }),
-          triggerAutomationEngine({
-            company,
-            conversation,
-            contact,
-            incomingText: messageBody,
-            messageType,
+        if (!existingMessage) {
+          await Message.create({
+            companyId: company._id,
+            conversationId: conversation._id,
+            metaMessageId,
             wamid: metaMessageId,
+            direction: 'inbound',
+            senderType: 'customer',
+            sender: {
+              name: customerName,
+              type: 'customer',
+            },
+            messageType,
+            type: messageType,
+            messageBody,
+            body: messageBody,
+            mediaUrl,
+            mediaCaption,
+            filename,
+            location: locationData,
+            contactCard: contactCardData,
+            deliveryStatus: 'delivered',
+            status: 'delivered',
+            timestamp: new Date(),
+          });
+
+          logWhatsAppTrace({
             traceId,
-            webhookStart,
-          }),
-        ]);
+            stage: 'MESSAGE_SAVED',
+            companyId: company._id,
+            phoneNumberId,
+            waId,
+            messageId: metaMessageId,
+            durationMs: Date.now() - webhookStart,
+          });
 
-        engineResults.forEach((res, idx) => {
-          if (res.status === 'rejected') {
-            logWhatsAppError({
+          currentStage = 'CONVERSATION_UPDATE';
+          // Update Conversation Last Message & Unread Count
+          conversation.lastMessage = messageBody;
+          conversation.lastMessageType = messageType;
+          conversation.lastMessageAt = new Date();
+          conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+          await conversation.save();
+
+          logWhatsAppTrace({
+            traceId,
+            stage: 'CONVERSATION_UPDATED',
+            companyId: company._id,
+            phoneNumberId,
+            waId,
+            messageId: metaMessageId,
+            durationMs: Date.now() - webhookStart,
+            metadata: { conversationId: conversation._id.toString() },
+          });
+
+          currentStage = 'ENGINES_EXECUTION';
+          // ─── AWAIT DOWNSTREAM ENGINES (Guarantees Vercel Serverless Execution) ───
+          logWhatsAppTrace({
+            traceId,
+            stage: 'ENGINES_EXECUTION_STARTED',
+            companyId: company._id,
+            phoneNumberId,
+            waId,
+            messageId: metaMessageId,
+            durationMs: Date.now() - webhookStart,
+          });
+
+          const engineResults = await Promise.allSettled([
+            triggerChatbotEngine({
+              company,
+              conversation,
+              contact,
+              incomingText: messageBody,
+              messageType,
+              buttonPayloadId,
               traceId,
-              stage: idx === 0 ? 'CHATBOT_ENGINE_FAILED' : 'AUTOMATION_ENGINE_FAILED',
-              companyId: company._id,
-              phoneNumberId,
-              waId,
-              messageId: metaMessageId,
-              errorCode: 'ENGINE_REJECTED',
-              errorMessage: res.reason?.message || String(res.reason),
-              durationMs: Date.now() - webhookStart,
-            });
-          }
+              webhookStart,
+            }),
+            triggerAutomationEngine({
+              company,
+              conversation,
+              contact,
+              incomingText: messageBody,
+              messageType,
+              wamid: metaMessageId,
+              traceId,
+              webhookStart,
+            }),
+          ]);
+
+          engineResults.forEach((res, idx) => {
+            if (res.status === 'rejected') {
+              logWhatsAppError({
+                traceId,
+                stage: idx === 0 ? 'CHATBOT_ENGINE_FAILED' : 'AUTOMATION_ENGINE_FAILED',
+                companyId: company._id,
+                phoneNumberId,
+                waId,
+                messageId: metaMessageId,
+                errorCode: 'ENGINE_REJECTED',
+                errorMessage: res.reason?.message || String(res.reason),
+                durationMs: Date.now() - webhookStart,
+              });
+            }
+          });
+          // ──────────────────────────────────────────────────────────────────────────
+        }
+
+        currentStage = 'WEBHOOK_COMPLETED';
+        await WebhookLog.create({
+          companyId: company._id,
+          phoneNumberId: phoneNumberId || '',
+          eventType: 'message_received',
+          payload: body,
+          status: 'PROCESSED',
         });
-        // ──────────────────────────────────────────────────────────────────────────
+
+        logWhatsAppTrace({
+          traceId,
+          stage: 'WEBHOOK_COMPLETED',
+          companyId: company._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          durationMs: Date.now() - webhookStart,
+        });
+      } catch (innerError) {
+        console.error('[WA_FATAL_ERROR]', {
+          traceId,
+          companyId: company?._id?.toString() || 'N/A',
+          phoneNumberId: phoneNumberId || 'N/A',
+          waId: waId || 'N/A',
+          stage: currentStage,
+          errorName: innerError?.name,
+          errorMessage: innerError?.message,
+          stack: innerError?.stack,
+        });
+
+        logWhatsAppError({
+          traceId,
+          stage: `FATAL_${currentStage}`,
+          companyId: company?._id,
+          phoneNumberId,
+          waId,
+          messageId: metaMessageId,
+          errorCode: innerError?.name || 'INNER_EXCEPTION',
+          errorMessage: innerError?.message || String(innerError),
+          durationMs: Date.now() - webhookStart,
+        });
+
+        return res.status(500).json({ success: false, stage: currentStage, error: innerError.message });
       }
-
-      await WebhookLog.create({
-        companyId: company._id,
-        phoneNumberId: phoneNumberId || '',
-        eventType: 'message_received',
-        payload: body,
-        status: 'PROCESSED',
-      });
-
-      logWhatsAppTrace({
-        traceId,
-        stage: 'WEBHOOK_COMPLETED',
-        companyId: company._id,
-        phoneNumberId,
-        waId,
-        messageId: metaMessageId,
-        durationMs: Date.now() - webhookStart,
-      });
     }
 
     return res.status(200).json({ status: 'EVENT_RECEIVED' });
   } catch (error) {
-    logWhatsAppError({
-      traceId: req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.id ? `WHATSAPP_${req.body.entry[0].changes[0].value.messages[0].id}` : 'WHATSAPP_UNKNOWN',
-      stage: 'WEBHOOK_FATAL_ERROR',
-      errorCode: 'WEBHOOK_EXCEPTION',
-      errorMessage: error.message,
-      durationMs: Date.now() - webhookStart,
+    console.error('[WA_FATAL_ERROR]', {
+      traceId: 'WHATSAPP_FATAL',
+      stage: 'WEBHOOK_TOP_LEVEL_EXCEPTION',
+      errorName: error?.name,
+      errorMessage: error?.message,
+      stack: error?.stack,
     });
     try {
       await WebhookLog.create({
