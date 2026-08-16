@@ -284,6 +284,12 @@ async function executeChatbotFlow({ companyId, company, flow, session, startNode
     totalDurationMs,
   });
 
+  // Mark BotSession inactive so subsequent customer messages trigger new flows cleanly
+  await BotSession.findByIdAndUpdate(session._id, {
+    isActive: false,
+    completedAt: new Date(),
+  });
+
   // Increment flow execution count
   await BotFlow.findByIdAndUpdate(flow._id, { $inc: { executionCount: 1 } });
 }

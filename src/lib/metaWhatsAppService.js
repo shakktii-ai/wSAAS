@@ -79,18 +79,29 @@ export async function sendMetaWhatsAppMessage({
     ...payload,
   };
 
+  const sendStart = Date.now();
+
   try {
     const response = await axios.post(endpoint, requestData, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
+      timeout: 10000,
     });
+
+    const sendDuration = Date.now() - sendStart;
+    console.log(
+      `[Outbound WhatsApp Sent] durationMs=${sendDuration}ms | resolvedPhoneNumberId=${phoneNumberId} | recipientWaId=${cleanPhone} | messageId=${response.data?.messages?.[0]?.id || 'N/A'}`
+    );
 
     return response.data;
   } catch (error) {
-    const errObj = error.response?.data?.error || { message: error.message };
-    console.error('Meta WhatsApp API Error:', errObj);
+    const sendDuration = Date.now() - sendStart;
+    const errObj = error.response?.data?.error || { message: error.message, code: error.code };
+    console.error(
+      `[WhatsApp Outbound Error] durationMs=${sendDuration}ms | companyId=${companyId || 'N/A'} | resolvedPhoneNumberId=${phoneNumberId} | errorCode=${errObj.code || 'HTTP_ERROR'} | errorMessage="${errObj.message}"`
+    );
     throw new Error(errObj.message || 'Failed to send WhatsApp message via Meta Cloud API');
   }
 }

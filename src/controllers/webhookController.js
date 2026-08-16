@@ -7,6 +7,7 @@ import WebhookLog from '@/models/WebhookLog';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 import { triggerAutomationEngine } from '@/lib/automationEngine';
 import { socketService } from '@/lib/socketService';
+import { latencyTracker } from '@/lib/latencyTracker';
 
 /**
  * Webhook Verification Handler (GET)
@@ -143,9 +144,12 @@ export const handleWebhookEvent = async (req, res) => {
 
       const waId = contactObj?.wa_id || incomingMsg.from;
       const customerPhone = incomingMsg.from || waId;
-      const customerName = contactObj?.profile?.name || waId;
       const metaMessageId = incomingMsg.id;
       const messageType = incomingMsg.type || 'text';
+
+      const trace = latencyTracker.createTrace(metaMessageId, company._id, phoneNumberId);
+      trace.logStage('WEBHOOK_RECEIVED');
+      trace.logStage('TENANT_RESOLVED', { companyId: company._id.toString() });
 
       // Auto-create Contact if does not exist
       let contact = await Contact.findOne({ companyId: company._id, waId });
@@ -299,21 +303,25 @@ export const handleWebhookEvent = async (req, res) => {
         conversation.unreadCount = (conversation.unreadCount || 0) + 1;
         await conversation.save();
 
+        if (trace) trace.logStage('CONVERSATION_UPDATED', { conversationId: conversation._id.toString() });
+
         // ─── LIVE CHATBOT ENGINE TRIGGER ───────────────────────────────
-        // Fire-and-forget: match published BotFlow triggers and execute
-        // asynchronously. Webhook has already returned HTTP 200.
+        if (trace) trace.logStage('CHATBOT_TRIGGERED');
         triggerChatbotEngine({
           company,
           conversation,
           contact,
           incomingText: messageBody,
           messageType,
-        }).catch((err) => console.error('[Webhook] ChatbotEngine trigger error:', err.message));
+          trace,
+        }).catch((err) => {
+          if (trace) trace.logError('CHATBOT_TRIGGER_FAILED', err);
+          console.error('[Webhook] ChatbotEngine trigger error:', err.message);
+        });
         // ────────────────────────────────────────────────────────────────
 
         // ─── LIVE AUTOMATION ENGINE TRIGGER ───────────────────────────
-        // Fire-and-forget: match published AutomationFlow workflows and
-        // execute node-by-node with full BullMQ + Socket.IO integration.
+        if (trace) trace.logStage('AUTOMATION_TRIGGERED');
         triggerAutomationEngine({
           company,
           conversation,
@@ -321,7 +329,11 @@ export const handleWebhookEvent = async (req, res) => {
           incomingText: messageBody,
           messageType,
           wamid: metaMessageId,
-        }).catch((err) => console.error('[Webhook] AutomationEngine trigger error:', err.message));
+          trace,
+        }).catch((err) => {
+          if (trace) trace.logError('AUTOMATION_TRIGGER_FAILED', err);
+          console.error('[Webhook] AutomationEngine trigger error:', err.message);
+        });
         // ────────────────────────────────────────────────────────────────
       }
 

@@ -151,11 +151,14 @@ export async function triggerAutomationEngine(ctx) {
     const matchedFlow = publishedFlows.find((f) => matchesTrigger(f, incomingText));
     if (!matchedFlow) return;
 
+    const { trace } = ctx;
+    if (trace) trace.logStage('AUTOMATION_RULE_MATCHED', { automationId: matchedFlow._id.toString() });
+
     // ── Prevent concurrent duplicate sessions for the same contact+flow ───
     const deduplicateKey = `auto:session:${companyId}:${waId}:${matchedFlow._id}`;
     const sessionRunning = await redisService.get(deduplicateKey);
     if (sessionRunning) return;
-    await redisService.set(deduplicateKey, '1', 300); // 5 min guard
+    await redisService.set(deduplicateKey, '1', 30); // 30 sec guard window
 
     // ── Create AutomationSession ──────────────────────────────────────────
     const session = await AutomationSession.create({
@@ -190,9 +193,15 @@ export async function triggerAutomationEngine(ctx) {
         conversation,
         contact,
         incomingText,
-      }).catch((err) => console.error('[AutomationEngine] Execution error:', err.message))
+        deduplicateKey,
+        trace,
+      }).catch((err) => {
+        if (trace) trace.logError('AUTOMATION_EXECUTION_FAILED', err);
+        console.error('[AutomationEngine] Execution error:', err.message);
+      })
     );
   } catch (err) {
+    if (ctx.trace) ctx.trace.logError('TRIGGER_AUTOMATION_FAILED', err);
     console.error('[AutomationEngine] triggerAutomationEngine error:', err.message);
   }
 }
@@ -238,7 +247,7 @@ export async function resumeAutomationSession(sessionId, nextNodeId) {
 
 // ─── FLOW EXECUTOR ────────────────────────────────────────────────────────────
 
-async function executeFlowFromNode({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText }) {
+async function executeFlowFromNode({ companyId, company, flow, session, startNodeId, conversation, contact, incomingText, deduplicateKey, trace }) {
   const flowStart = Date.now();
   const executedSteps = [];
 
@@ -356,6 +365,11 @@ async function executeFlowFromNode({ companyId, company, flow, session, startNod
       finishedAt: new Date(),
       currentNodeId: '',
     });
+  }
+
+  // Clear deduplication lock unless session is paused for an intentional delay
+  if (deduplicateKey && !session.pausedForDelay) {
+    await redisService.del(deduplicateKey);
   }
 
   // Write AutomationLog
