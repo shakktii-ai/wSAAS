@@ -4,22 +4,22 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950;
+    @apply bg-white text-slate-900 font-sans antialiased selection:bg-emerald-600 selection:text-white;
   }
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar for Clean White Theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(241, 245, 249, 0.8);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: rgba(203, 213, 225, 0.9);
   border-radius: 9999px;
 }
 

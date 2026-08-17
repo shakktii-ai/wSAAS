@@ -51,19 +51,19 @@ export default function SuperAdminPortal() {
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-purple-400" /> Super Admin Platform Control Center
+          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-purple-600" /> Super Admin Platform Control Center
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Global multi-tenant governance, company suspension, API keys, and security audit logs.
           </p>
         </div>
 
         {/* Multi-tenant Company Management */}
-        <Card title={`Registered Company Tenants (${companies.length})`}>
+        <Card title={`Registered Company Tenants (${companies.length})`} className="shadow-xs bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 font-bold">
                 <tr>
                   <th className="px-4 py-3">Company Workspace</th>
                   <th className="px-4 py-3">Slug</th>
@@ -73,23 +73,23 @@ export default function SuperAdminPortal() {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-xs">
+              <tbody className="divide-y divide-slate-100 text-xs font-medium">
                 {companies.map((c) => (
-                  <tr key={c._id}>
-                    <td className="px-4 py-3 font-semibold text-white">{c.name}</td>
-                    <td className="px-4 py-3 font-mono text-slate-400">{c.slug}</td>
+                  <tr key={c._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-bold text-slate-900">{c.name}</td>
+                    <td className="px-4 py-3 font-mono text-slate-600">{c.slug}</td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 font-bold uppercase rounded bg-purple-500/20 text-purple-400">
+                      <span className="px-2 py-0.5 font-bold uppercase rounded bg-purple-100 text-purple-800 border border-purple-200">
                         {c.plan}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono">{c.userCount || 1} Users</td>
+                    <td className="px-4 py-3 font-mono text-slate-700">{c.userCount || 1} Users</td>
                     <td className="px-4 py-3">
                       <span
                         className={`px-2 py-0.5 font-bold uppercase rounded-full border ${
                           c.status === 'active'
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                            : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : 'bg-rose-100 text-rose-800 border-rose-200'
                         }`}
                       >
                         {c.status}
@@ -112,10 +112,10 @@ export default function SuperAdminPortal() {
         </Card>
 
         {/* Audit Log Stream */}
-        <Card title={`System Audit Logs (${auditLogs.length})`}>
+        <Card title={`System Audit Logs (${auditLogs.length})`} className="shadow-xs bg-white">
           <div className="overflow-x-auto max-h-[400px] scrollbar-thin">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="text-slate-500 uppercase bg-slate-50 border-b border-slate-200 font-bold">
                 <tr>
                   <th className="px-3 py-2">Timestamp</th>
                   <th className="px-3 py-2">User</th>
@@ -123,13 +123,13 @@ export default function SuperAdminPortal() {
                   <th className="px-3 py-2">Resource</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-100 font-mono">
                 {auditLogs.map((log) => (
-                  <tr key={log._id}>
-                    <td className="px-3 py-2 text-slate-400">{new Date(log.createdAt).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-white">{log.userName}</td>
-                    <td className="px-3 py-2 text-purple-400">{log.action}</td>
-                    <td className="px-3 py-2 text-slate-300">{log.resource}</td>
+                  <tr key={log._id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-3 py-2 text-slate-500">{new Date(log.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-slate-900 font-bold">{log.userName}</td>
+                    <td className="px-3 py-2 text-purple-700 font-bold">{log.action}</td>
+                    <td className="px-3 py-2 text-slate-700">{log.resource}</td>
                   </tr>
                 ))}
               </tbody>

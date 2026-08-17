@@ -83,27 +83,27 @@ export default function SaaSOnboardingWizard() {
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-emerald-400" /> WhatsApp Onboarding & Connection Setup
+          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-emerald-600" /> WhatsApp Onboarding Setup
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Connect your official WhatsApp Business Account to start sending and receiving messages in Shakktii Inbox.
           </p>
         </div>
 
         {/* Free SaaS Disclaimer Banner */}
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-3">
-          <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-3">
+          <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
           <div>
-            <strong className="block text-white text-sm font-semibold mb-0.5">Shakktii SaaS is Free to Use</strong>
-            <span>
+            <strong className="block text-slate-900 text-sm font-bold mb-0.5">Shakktii SaaS is Free to Use</strong>
+            <span className="text-slate-700">
               Shakktii is free to use. WhatsApp/Meta messaging charges, if applicable, are billed directly by Meta to your Meta Business Account.
             </span>
           </div>
         </div>
 
         {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-bold">
             <AlertCircle className="w-4 h-4 shrink-0" /> {errorMessage}
           </div>
         )}
@@ -111,74 +111,74 @@ export default function SaaSOnboardingWizard() {
         {/* Main Step Cards */}
         <div className="space-y-4">
           {/* Step 1: Create Account & Workspace */}
-          <Card className="border-slate-800">
+          <Card className="border-slate-200 bg-white shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs border border-emerald-200">
                   ✓
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">1. Create Shakktii Account & Workspace</h3>
-                  <p className="text-xs text-slate-400">Account created and workspace initialized.</p>
+                  <h3 className="text-sm font-bold text-slate-900">1. Create Shakktii Account & Workspace</h3>
+                  <p className="text-xs text-slate-500">Account created and workspace initialized.</p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
                 Completed
               </span>
             </div>
           </Card>
 
           {/* Step 2: Connect WhatsApp via Meta */}
-          <Card className={isConnected ? 'border-emerald-500/40' : 'border-blue-500/40 shadow-lg shadow-blue-500/5'}>
+          <Card className={isConnected ? 'border-emerald-200 bg-white shadow-xs' : 'border-blue-200 bg-white shadow-xs'}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                    isConnected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    isConnected ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
                   }`}>
                     {isConnected ? '✓' : '2'}
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white">2. Connect WhatsApp Business Account</h3>
-                    <p className="text-xs text-slate-400">Authorize Shakktii via official Meta Embedded Signup.</p>
+                    <h3 className="text-sm font-bold text-slate-900">2. Connect WhatsApp Business Account</h3>
+                    <p className="text-xs text-slate-500">Authorize Shakktii via official Meta Embedded Signup.</p>
                   </div>
                 </div>
 
-                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
-                  isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
+                  isConnected ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'
                 }`}>
                   {isConnected ? 'Connected' : 'Action Required'}
                 </span>
               </div>
 
               {!isConnected ? (
-                <div className="pt-2 border-t border-slate-800 space-y-3">
-                  <p className="text-xs text-slate-300">
+                <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <p className="text-xs text-slate-600">
                     Click the button below to launch Meta Embedded Signup. You will log in with Facebook, select your WhatsApp Business Account, select your phone number, and authorize Shakktii.
                   </p>
                   <Button
                     variant="primary"
                     onClick={handleLaunchMetaSignup}
                     disabled={connecting}
-                    className="w-full md:w-auto flex items-center justify-center gap-2"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                   >
                     <Smartphone className="w-4 h-4" />
                     {connecting ? 'Connecting with Meta...' : 'Connect WhatsApp with Meta'}
                   </Button>
                 </div>
               ) : (
-                <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
-                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-4 h-4" /> WhatsApp Business Account connected
+                <div className="pt-3 border-t border-slate-100 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> WhatsApp Business Account connected
                   </div>
-                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-4 h-4" /> Phone number connected ({status?.displayPhoneNumber || 'Connected'})
+                  <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Phone number connected ({status?.displayPhoneNumber || 'Connected'})
                   </div>
-                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-4 h-4" /> Webhook connected & verified
+                  <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Webhook connected & verified
                   </div>
-                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-4 h-4" /> Messaging ready
+                  <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Messaging ready
                   </div>
                 </div>
               )}
@@ -186,11 +186,11 @@ export default function SaaSOnboardingWizard() {
           </Card>
 
           {/* Step 3: Go to Dashboard Inbox */}
-          <Card className={isConnected ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800 opacity-60'}>
+          <Card className={isConnected ? 'border-emerald-200 bg-emerald-50/50 shadow-xs' : 'border-slate-200 bg-white opacity-70'}>
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-bold text-white">3. Access Shakktii Inbox</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <h3 className="text-sm font-bold text-slate-900">3. Access Shakktii Inbox</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
                   Start sending broadcasts, automated replies, and managing live customer conversations.
                 </p>
               </div>

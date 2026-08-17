@@ -159,45 +159,45 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Team Analytics Metrics */}
+        {/* Metrics Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <Activity className="w-5 h-5" />
+          <Card className="flex items-center gap-3 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
+              <User className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Online Agents</p>
-              <h3 className="text-lg font-bold text-white">{summary.onlineAgents} / {summary.totalAgents}</h3>
+              <p className="text-xs text-slate-500 font-medium">Online Agents</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.onlineAgents || users.length} Online</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+          <Card className="flex items-center gap-3 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
               <MessageCircle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Active Support Chats</p>
-              <h3 className="text-lg font-bold text-white">12 Active</h3>
+              <p className="text-xs text-slate-500 font-medium">Assigned Chats</p>
+              <h3 className="text-lg font-bold text-slate-900">12 Active</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+          <Card className="flex items-center gap-3 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Avg First Response</p>
-              <h3 className="text-lg font-bold text-white">1.8 min</h3>
+              <p className="text-xs text-slate-500 font-medium">Avg First Response</p>
+              <h3 className="text-lg font-bold text-slate-900">1.8 min</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+          <Card className="flex items-center gap-3 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-700">
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Team SLA Score</p>
-              <h3 className="text-lg font-bold text-white">98.4%</h3>
+              <p className="text-xs text-slate-500 font-medium">Team SLA Score</p>
+              <h3 className="text-lg font-bold text-slate-900">98.4%</h3>
             </div>
           </Card>
         </div>
@@ -205,8 +205,8 @@ export default function UserManagement() {
         {/* Team Leaderboard Table */}
         <Card title={`Support Agents Leaderboard (${users.length})`} subtitle="Real-time response times & assignment metrics">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="text-[11px] text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Agent</th>
                   <th className="px-4 py-3">Department</th>
@@ -217,37 +217,37 @@ export default function UserManagement() {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-medium">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {users.map((u) => (
-                  <tr key={u._id} className="hover:bg-slate-850/50 transition-colors">
+                  <tr key={u._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-xs">
+                      <div className="w-8 h-8 rounded-full bg-emerald-600 border border-emerald-700 flex items-center justify-center font-bold text-white text-xs shadow-sm">
                         {u.name ? u.name[0].toUpperCase() : 'A'}
                       </div>
                       <div>
-                        <p className="font-semibold text-white">{u.name}</p>
-                        <p className="text-[10px] text-slate-400">{u.email}</p>
+                        <p className="font-bold text-slate-900">{u.name}</p>
+                        <p className="text-[10px] text-slate-500">{u.email}</p>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 text-slate-400">{u.department || 'Support'}</td>
+                    <td className="px-4 py-3 text-slate-600 font-medium">{u.department || 'Support'}</td>
 
                     <td className="px-4 py-3">{getPresenceBadge(u.presence || 'online')}</td>
 
-                    <td className="px-4 py-3 font-mono font-bold text-emerald-400">
+                    <td className="px-4 py-3 font-mono font-bold text-emerald-700">
                       {u.activeChatsCount || 0} Chats
                     </td>
 
-                    <td className="px-4 py-3 font-mono text-slate-300">
+                    <td className="px-4 py-3 font-mono text-slate-700">
                       {Math.round((u.avgResponseTimeSeconds || 120) / 60)}m avg
                     </td>
 
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white font-mono">{u.performanceScore || 95}%</span>
-                        <div className="w-16 bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                        <span className="font-bold text-slate-900 font-mono">{u.performanceScore || 95}%</span>
+                        <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200">
                           <div
-                            className="bg-emerald-500 h-1.5 rounded-full"
+                            className="bg-emerald-600 h-1.5 rounded-full"
                             style={{ width: `${u.performanceScore || 95}%` }}
                           />
                         </div>
@@ -258,7 +258,7 @@ export default function UserManagement() {
                       {u._id !== currentUser?._id && (
                         <button
                           onClick={() => handleDeleteUser(u._id)}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -274,33 +274,33 @@ export default function UserManagement() {
         {/* Invite User Modal */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Invite Agent to Workspace">
           {modalError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-bold">
               <AlertCircle className="w-4 h-4" /> {modalError}
             </div>
           )}
 
           <form onSubmit={handleAddUser} className="space-y-4 text-xs">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Full Name *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Full Name *</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Sarah Jenkins"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Email Address *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Email Address *</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="sarah@company.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
               />
             </div>
 

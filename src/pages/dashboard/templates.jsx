@@ -275,10 +275,10 @@ export default function TemplateManagerPage() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
-              <FileText className="w-7 h-7 text-emerald-400" /> Enterprise WhatsApp Template Manager
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+              <FileText className="w-7 h-7 text-emerald-600" /> Enterprise WhatsApp Template Manager
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Create, review, sync, preview, and manage official Meta Cloud HSM WhatsApp templates directly from SyncChat.
             </p>
           </div>
@@ -293,8 +293,8 @@ export default function TemplateManagerPage() {
         </div>
 
         {syncSuccess && (
-          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2.5 shadow-lg shadow-emerald-500/5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2.5 font-bold shadow-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{syncSuccess}</span>
           </div>
         )}
@@ -302,27 +302,27 @@ export default function TemplateManagerPage() {
         {/* Main Workspace Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Panel Filters */}
-          <div className="lg:col-span-1 space-y-5 bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80">
+          <div className="lg:col-span-1 space-y-5 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
             {/* Search Input */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                 Search Templates
               </label>
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Filter by name..."
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
                 />
               </div>
             </div>
 
             {/* Status Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                 Status
               </label>
               <div className="space-y-1">
@@ -330,14 +330,14 @@ export default function TemplateManagerPage() {
                   <button
                     key={st}
                     onClick={() => setSelectedStatus(st)}
-                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-colors ${
                       selectedStatus === st
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }`}
                   >
                     <span>{st === 'ALL' ? 'All Statuses' : st}</span>
-                    {selectedStatus === st && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                    {selectedStatus === st && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
                   </button>
                 ))}
               </div>
@@ -345,13 +345,13 @@ export default function TemplateManagerPage() {
 
             {/* Category Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                 Category
               </label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
               >
                 <option value="ALL">All Categories</option>
                 <option value="MARKETING">MARKETING</option>
@@ -362,13 +362,13 @@ export default function TemplateManagerPage() {
 
             {/* Language Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                 Language
               </label>
               <select
                 value={selectedLanguage}
                 onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
               >
                 <option value="ALL">All Languages</option>
                 <option value="en_US">English (en_US)</option>
@@ -382,13 +382,13 @@ export default function TemplateManagerPage() {
 
             {/* Sort Order */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                 Sort By
               </label>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
               >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
@@ -401,17 +401,17 @@ export default function TemplateManagerPage() {
           {/* Main Grid View */}
           <div className="lg:col-span-3 space-y-4">
             {loading ? (
-              <div className="p-12 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
-                <RefreshCw className="w-5 h-5 animate-spin text-emerald-400" />
+              <div className="p-12 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
+                <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
                 <span>Loading WhatsApp templates...</span>
               </div>
             ) : templates.length === 0 ? (
-              <Card className="p-12 text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
+              <Card className="p-12 text-center space-y-4 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto text-slate-500">
                   <FileText className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">No WhatsApp templates found</h3>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                <h3 className="text-sm font-bold text-slate-900">No WhatsApp templates found</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
                   Create a new template using the wizard or click "Sync Templates" to pull existing WABA templates from Meta Cloud API.
                 </p>
                 <Button icon={Plus} onClick={openCreateWizard} className="mx-auto">
@@ -421,35 +421,35 @@ export default function TemplateManagerPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {templates.map((tpl) => (
-                  <Card key={tpl._id} className="flex flex-col justify-between hover:border-slate-700 transition-all border-slate-800/80">
+                  <Card key={tpl._id} className="flex flex-col justify-between hover:border-slate-300 transition-all border-slate-200 shadow-xs bg-white">
                     <div>
                       {/* Top Meta Bar */}
                       <div className="flex items-start justify-between gap-2 mb-2.5">
                         <div className="overflow-hidden">
-                          <h3 className="font-bold text-white text-sm truncate tracking-tight" title={tpl.name}>
+                          <h3 className="font-extrabold text-slate-900 text-sm truncate tracking-tight" title={tpl.name}>
                             {tpl.name}
                           </h3>
                           <div className="flex items-center gap-2 mt-1">
                             {renderCategoryBadge(tpl.category)}
-                            <span className="text-[10px] text-slate-400 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] text-slate-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                               {tpl.language}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-semibold">v{tpl.version || 1}</span>
+                            <span className="text-[10px] text-slate-500 font-bold">v{tpl.version || 1}</span>
                           </div>
                         </div>
                         <div>{renderStatusBadge(tpl.status)}</div>
                       </div>
 
                       {/* Content Preview Box */}
-                      <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto scrollbar-thin">
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-mono whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto scrollbar-thin">
                         {tpl.headerText && (
-                          <div className="font-bold text-white mb-1.5 pb-1 border-b border-slate-800">
+                          <div className="font-bold text-slate-900 mb-1.5 pb-1 border-b border-slate-200">
                             [{tpl.headerType}] {tpl.headerText}
                           </div>
                         )}
                         <div>{tpl.bodyText || '[Body Content]'}</div>
                         {tpl.footerText && (
-                          <div className="text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-800/60">
+                          <div className="text-[10px] text-slate-500 mt-1.5 pt-1 border-t border-slate-200">
                             {tpl.footerText}
                           </div>
                         )}
@@ -459,7 +459,7 @@ export default function TemplateManagerPage() {
                       {tpl.buttons && tpl.buttons.length > 0 && (
                         <div className="mt-2.5 flex flex-wrap gap-1.5">
                           {tpl.buttons.map((b, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] text-emerald-400 border border-slate-700 font-medium">
+                            <span key={i} className="px-2 py-0.5 rounded-md bg-emerald-50 text-[10px] text-emerald-800 border border-emerald-200 font-bold">
                               🔘 {b.text} ({b.type})
                             </span>
                           ))}
@@ -468,8 +468,8 @@ export default function TemplateManagerPage() {
                     </div>
 
                     {/* Footer Actions Bar */}
-                    <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-                      <div className="text-[10px] text-slate-500">
+                    <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <div className="text-[10px] text-slate-500 font-medium">
                         <span>Synced: {new Date(tpl.syncedAt || tpl.updatedAt).toLocaleDateString()}</span>
                       </div>
 
@@ -477,7 +477,7 @@ export default function TemplateManagerPage() {
                         {tpl.status === 'REJECTED' && (
                           <button
                             onClick={() => setRejectionTemplate(tpl)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-xs font-bold transition-colors flex items-center gap-1"
+                            className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-colors flex items-center gap-1 border border-rose-200"
                             title="View Rejection Reason"
                           >
                             <AlertCircle className="w-3.5 h-3.5" /> Fix

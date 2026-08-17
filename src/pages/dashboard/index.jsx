@@ -44,16 +44,16 @@ export default function DashboardOverview() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-slate-800 p-6 rounded-3xl">
+        {/* Welcome Header Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-6 rounded-3xl shadow-xs">
           <div>
-            <span className="px-3 py-1 text-[11px] font-bold tracking-wider uppercase bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 mb-2 inline-block">
+            <span className="px-3 py-1 text-[11px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 mb-2 inline-block">
               {company?.name || 'Workspace'} Tenant Portal
             </span>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
               Good day, {user?.name?.split(' ')[0] || 'Agent'} 👋
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1 font-normal">
               Here is your Meta WhatsApp Cloud API communication status & performance summary.
             </p>
           </div>
@@ -68,14 +68,14 @@ export default function DashboardOverview() {
 
         {/* Meta WABA Connection Alert Banner */}
         {!isWabaConnected && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400">
+              <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-white">WhatsApp Business Account Pending Connection</h4>
-                <p className="text-xs text-slate-400">
+                <h4 className="text-sm font-bold text-slate-900">WhatsApp Business Account Pending Connection</h4>
+                <p className="text-xs text-slate-600">
                   Connect your Phone Number ID and Permanent Access Token to start sending & receiving messages.
                 </p>
               </div>
@@ -90,69 +90,69 @@ export default function DashboardOverview() {
 
         {/* Key Performance Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="hover:border-slate-700 transition-colors">
+          <Card className="hover:border-slate-300 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Total Contacts</span>
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+              <span className="text-xs text-slate-500 font-medium">Total Contacts</span>
+              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                 <Users className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-2">
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">
               {loading ? '...' : (metrics?.totalContacts || 0).toLocaleString()}
             </p>
-            <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-              <TrendingUp className="w-3 h-3" /> Live Mongoose DB
+            <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1 font-semibold">
+              <TrendingUp className="w-3 h-3 text-emerald-600" /> Live Mongoose DB
             </p>
           </Card>
 
-          <Card className="hover:border-slate-700 transition-colors">
+          <Card className="hover:border-slate-300 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Messages Sent / Outbound</span>
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <span className="text-xs text-slate-500 font-medium">Messages Sent / Outbound</span>
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
                 <Send className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-2">
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">
               {loading ? '...' : (metrics?.outboundCount || metrics?.totalMessages || 0).toLocaleString()}
             </p>
-            <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-              <CheckCircle2 className="w-3 h-3" /> Meta Cloud API SLA
+            <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1 font-semibold">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Meta Cloud API SLA
             </p>
           </Card>
 
-          <Card className="hover:border-slate-700 transition-colors">
+          <Card className="hover:border-slate-300 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Active Conversations</span>
-              <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400">
+              <span className="text-xs text-slate-500 font-medium">Active Conversations</span>
+              <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
                 <MessageCircle className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-2">
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">
               {loading ? '...' : (metrics?.totalConversations || 0).toLocaleString()}
             </p>
-            <p className="text-[11px] text-slate-400 mt-1 font-medium">Shared Inbox Queue</p>
+            <p className="text-[11px] text-slate-500 mt-1 font-medium">Shared Inbox Queue</p>
           </Card>
 
-          <Card className="hover:border-slate-700 transition-colors">
+          <Card className="hover:border-slate-300 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-medium">Meta Templates Synced</span>
-              <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+              <span className="text-xs text-slate-500 font-medium">Meta Templates Synced</span>
+              <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
                 <Sparkles className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-2">
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">
               {loading ? '...' : (metrics?.totalTemplates || 0).toLocaleString()}
             </p>
-            <p className="text-[11px] text-emerald-400 mt-1 font-medium">Approved by Meta</p>
+            <p className="text-[11px] text-emerald-700 mt-1 font-semibold">Approved by Meta</p>
           </Card>
         </div>
 
         {/* Feature Modules Quick Access Grid */}
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">SyncChat Enterprise Modules</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Shakktii Workspace Modules</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card title="Official WhatsApp API" subtitle="Meta Cloud Integration">
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-600 mb-4 font-normal">
                 Connect your WABA, store tokens, manage message templates, and inspect webhook logs.
               </p>
               <Link href="/dashboard/whatsapp">
@@ -163,7 +163,7 @@ export default function DashboardOverview() {
             </Card>
 
             <Card title="Shared Inbox" subtitle="Team Customer Communication">
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-600 mb-4 font-normal">
                 Realtime chat, agent assignment, internal notes, pinned conversations, and contact management.
               </p>
               <Link href="/dashboard/inbox">
@@ -174,7 +174,7 @@ export default function DashboardOverview() {
             </Card>
 
             <Card title="Automation Builder" subtitle="Visual Bot & AI Workflows">
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-600 mb-4 font-normal">
                 Drag-and-drop chatbot builder, triggers, conditions, delays, and AI auto-suggested replies.
               </p>
               <Link href="/dashboard/chatbot">

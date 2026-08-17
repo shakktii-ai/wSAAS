@@ -140,10 +140,10 @@ export default function EnterpriseAIStudio() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <BrainCircuit className="w-6 h-6 text-purple-400" /> Enterprise AI Studio
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <BrainCircuit className="w-6 h-6 text-purple-600" /> Enterprise AI Studio
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Isolated company AI intelligence layer, RAG knowledge vectors, multi-LLM provider abstraction, and brand voice prompts.
             </p>
           </div>
@@ -159,53 +159,53 @@ export default function EnterpriseAIStudio() {
 
         {/* AI Metrics Overview */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-700">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Knowledge Docs</p>
-              <h3 className="text-lg font-bold text-white">{analytics.totalDocuments}</h3>
+              <p className="text-xs text-slate-500 font-medium">Knowledge Docs</p>
+              <h3 className="text-lg font-bold text-slate-900">{analytics.totalDocuments}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
               <Zap className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Indexed Vector Chunks</p>
-              <h3 className="text-lg font-bold text-white">{analytics.totalChunks}</h3>
+              <p className="text-xs text-slate-500 font-medium">Indexed Vector Chunks</p>
+              <h3 className="text-lg font-bold text-slate-900">{analytics.totalChunks}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">RAG Grounded Accuracy</p>
-              <h3 className="text-lg font-bold text-white">{analytics.accuracyRate}%</h3>
+              <p className="text-xs text-slate-500 font-medium">RAG Grounded Accuracy</p>
+              <h3 className="text-lg font-bold text-slate-900">{analytics.accuracyRate}%</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Avg Latency</p>
-              <h3 className="text-lg font-bold text-white">{analytics.avgResponseTimeMs}ms</h3>
+              <p className="text-xs text-slate-500 font-medium">Avg Latency</p>
+              <h3 className="text-lg font-bold text-slate-900">{analytics.avgResponseTimeMs}ms</h3>
             </div>
           </Card>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 space-x-6 text-xs font-semibold">
+        <div className="flex border-b border-slate-200 space-x-6 text-xs font-bold">
           <button
             onClick={() => setActiveTab('knowledge')}
             className={`pb-3 transition-colors ${
-              activeTab === 'knowledge' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'
+              activeTab === 'knowledge' ? 'text-purple-700 border-b-2 border-purple-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             📚 Knowledge Base Documents ({articles.length})
@@ -214,7 +214,7 @@ export default function EnterpriseAIStudio() {
           <button
             onClick={() => setActiveTab('prompts')}
             className={`pb-3 transition-colors ${
-              activeTab === 'prompts' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'
+              activeTab === 'prompts' ? 'text-purple-700 border-b-2 border-purple-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             🎯 Brand Voice Prompts ({prompts.length})
@@ -223,7 +223,7 @@ export default function EnterpriseAIStudio() {
           <button
             onClick={() => setActiveTab('playground')}
             className={`pb-3 transition-colors ${
-              activeTab === 'playground' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-400 hover:text-white'
+              activeTab === 'playground' ? 'text-purple-700 border-b-2 border-purple-600' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             ⚡ RAG Playground & Tester
@@ -234,26 +234,26 @@ export default function EnterpriseAIStudio() {
         {activeTab === 'knowledge' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {articles.map((art) => (
-              <Card key={art._id} className="flex flex-col justify-between hover:border-slate-700 transition-colors">
+              <Card key={art._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors shadow-xs bg-white">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                    <span className="text-[10px] font-mono text-purple-800 bg-purple-100 px-2 py-0.5 rounded border border-purple-200 font-bold">
                       {art.docType || 'TXT'}
                     </span>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
                       {art.status}
                     </span>
                   </div>
-                  <h4 className="font-bold text-white text-sm mb-1">{art.title}</h4>
-                  <p className="text-xs text-slate-400 mb-2">{art.category}</p>
-                  <p className="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800 font-mono line-clamp-4">
+                  <h4 className="font-bold text-slate-900 text-sm mb-1">{art.title}</h4>
+                  <p className="text-xs text-slate-500 mb-2 font-medium">{art.category}</p>
+                  <p className="text-xs text-slate-800 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono line-clamp-4 leading-relaxed">
                     {art.content}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-800 text-[11px] text-slate-500">
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-200 text-[11px] text-slate-500 font-medium">
                   <span>{art.chunkCount || 1} Vector Chunks</span>
-                  <button onClick={() => handleDeleteArticle(art._id)} className="text-slate-500 hover:text-rose-400">
+                  <button onClick={() => handleDeleteArticle(art._id)} className="text-slate-400 hover:text-rose-600">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -266,15 +266,15 @@ export default function EnterpriseAIStudio() {
         {activeTab === 'prompts' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {prompts.map((p) => (
-              <Card key={p._id} className="space-y-2">
+              <Card key={p._id} className="space-y-2 shadow-xs bg-white">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-white text-sm">{p.name}</h4>
-                  <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  <h4 className="font-bold text-slate-900 text-sm">{p.name}</h4>
+                  <span className="text-[10px] uppercase font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
                     {p.type}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">Tone: {p.tone}</p>
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
+                <p className="text-xs text-slate-500 font-medium">Tone: {p.tone}</p>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-800 leading-relaxed">
                   {p.promptText}
                 </div>
               </Card>
@@ -284,10 +284,10 @@ export default function EnterpriseAIStudio() {
 
         {/* Tab Content: RAG Playground */}
         {activeTab === 'playground' && (
-          <Card title="Enterprise RAG Grounded Completion Playground">
+          <Card title="Enterprise RAG Grounded Completion Playground" className="shadow-xs bg-white">
             <form onSubmit={handleTestAI} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Simulated Customer Question / Inquiry
                 </label>
                 <div className="flex gap-2">
@@ -296,7 +296,7 @@ export default function EnterpriseAIStudio() {
                     required
                     value={testQuery}
                     onChange={(e) => setTestQuery(e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white"
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-600"
                   />
                   <Button type="submit" loading={generating} icon={Sparkles}>
                     Generate RAG Answer

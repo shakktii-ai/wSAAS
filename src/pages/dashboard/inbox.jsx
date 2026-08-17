@@ -288,33 +288,33 @@ export default function SharedInbox() {
     <DashboardLayout>
       <div className="h-[calc(100vh-6rem)] flex gap-4 overflow-hidden">
         {/* Module 4: Shared Inbox Sidebar */}
-        <div className="w-80 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-col overflow-hidden flex-shrink-0">
-          <div className="p-3 border-b border-slate-800 space-y-2">
+        <div className="w-80 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden flex-shrink-0 shadow-xs">
+          <div className="p-3 border-b border-slate-200 space-y-2 bg-slate-50/60">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-white text-sm flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-emerald-400" /> Shared Inbox
+              <h2 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-emerald-600" /> Shared Inbox
               </h2>
-              <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
+              <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 text-[11px]">
                 <button
                   onClick={() => setStatusFilter('open')}
-                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
-                    statusFilter === 'open' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    statusFilter === 'open' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Open
                 </button>
                 <button
                   onClick={() => setStatusFilter('closed')}
-                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
-                    statusFilter === 'closed' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    statusFilter === 'closed' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Closed
                 </button>
                 <button
                   onClick={() => setStatusFilter('all')}
-                  className={`px-2 py-0.5 rounded font-medium transition-colors ${
-                    statusFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    statusFilter === 'all' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   All
@@ -323,19 +323,19 @@ export default function SharedInbox() {
             </div>
 
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search name, phone, waId..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600"
               />
             </div>
           </div>
 
           {/* Conversations Directory */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 scrollbar-thin">
             {conversations.map((conv) => {
               const isSelected = selectedConversation?._id === conv._id;
               const phoneDisplay = conv.waId || conv.customerPhone;
@@ -344,30 +344,30 @@ export default function SharedInbox() {
                   key={conv._id}
                   onClick={() => loadThread(conv)}
                   className={`p-3 cursor-pointer transition-colors flex items-start gap-3 relative ${
-                    isSelected ? 'bg-emerald-500/10 border-l-2 border-emerald-500' : 'hover:bg-slate-850/50'
+                    isSelected ? 'bg-emerald-50 border-l-4 border-emerald-600' : 'hover:bg-slate-50'
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-xs flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs">
                     {conv.customerName ? conv.customerName[0].toUpperCase() : 'C'}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs font-semibold text-white truncate flex items-center gap-1">
+                      <p className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
                         {conv.customerName || phoneDisplay}
-                        {conv.isPinned && <Pin className="w-3 h-3 text-emerald-400 fill-current" />}
+                        {conv.isPinned && <Pin className="w-3 h-3 text-emerald-600 fill-current" />}
                       </p>
                       <span className="text-[10px] text-slate-500 font-mono">
                         {new Date(conv.lastMessageAt || conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-400 truncate">{conv.lastMessage || 'No messages yet'}</p>
+                    <p className="text-xs text-slate-600 truncate font-normal">{conv.lastMessage || 'No messages yet'}</p>
 
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[10px] font-mono text-slate-500">{phoneDisplay}</span>
                       {(conv.assignedAgent?.name || conv.assignedAgentId?.name) && (
-                        <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        <span className="text-[9px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
                           {conv.assignedAgent?.name || conv.assignedAgentId?.name}
                         </span>
                       )}
@@ -375,7 +375,7 @@ export default function SharedInbox() {
                   </div>
 
                   {conv.unreadCount > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                    <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                       {conv.unreadCount}
                     </span>
                   )}
@@ -386,19 +386,19 @@ export default function SharedInbox() {
         </div>
 
         {/* Module 5: Chat Window Thread */}
-        <div className="flex-1 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-col overflow-hidden min-w-0 relative">
+        <div className="flex-1 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden min-w-0 relative shadow-xs">
           {selectedConversation ? (
             <>
               {/* Thread Header */}
-              <div className="h-14 px-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+              <div className="h-14 px-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-xs">
+                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
                     {selectedConversation.customerName[0]?.toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                       {selectedConversation.customerName}
-                      <span className="text-[10px] font-mono text-slate-400">
+                      <span className="text-[10px] font-mono text-slate-500">
                         ({selectedConversation.waId || selectedConversation.customerPhone})
                       </span>
                     </h3>
@@ -406,8 +406,8 @@ export default function SharedInbox() {
                       <span
                         className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                           selectedConversation.status === 'closed'
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         }`}
                       >
                         {selectedConversation.status || 'Open'}
@@ -429,7 +429,7 @@ export default function SharedInbox() {
                   <select
                     value={selectedConversation.assignedAgent?._id || selectedConversation.assignedAgentId?._id || ''}
                     onChange={(e) => handleAssignAgent(e.target.value)}
-                    className="bg-slate-950 text-slate-300 text-xs rounded-lg px-2 py-1 border border-slate-800 focus:outline-none"
+                    className="bg-white text-slate-800 text-xs rounded-lg px-2 py-1 border border-slate-200 focus:outline-none focus:border-emerald-600 font-medium"
                   >
                     <option value="">Unassigned Agent</option>
                     {teamAgents.map((a) => (
@@ -443,8 +443,8 @@ export default function SharedInbox() {
                     onClick={handleTogglePin}
                     className={`p-1.5 rounded-lg border transition-colors ${
                       selectedConversation.isPinned
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-white text-slate-600 border-slate-200'
                     }`}
                     title="Pin Conversation"
                   >
@@ -454,7 +454,7 @@ export default function SharedInbox() {
               </div>
 
               {/* Chat Message History */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-wa-darkBg scrollbar-thin">
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/70 scrollbar-thin">
                 {messages.map((msg, index) => {
                   const isOutbound = msg.direction === 'outbound' || msg.senderType === 'agent';
                   const mType = msg.messageType || msg.type || 'text';
@@ -471,7 +471,7 @@ export default function SharedInbox() {
                     <React.Fragment key={msg._id || index}>
                       {showDateHeader && (
                         <div className="flex justify-center my-3">
-                          <span className="text-[10px] font-bold text-slate-400 bg-slate-900/90 px-3 py-1 rounded-full border border-slate-800 uppercase tracking-wider">
+                          <span className="text-[10px] font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 uppercase tracking-wider shadow-xs">
                             {formatDateHeader(msg.timestamp || msg.createdAt)}
                           </span>
                         </div>
@@ -479,12 +479,12 @@ export default function SharedInbox() {
 
                       <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} group`}>
                         <div
-                          className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-md relative ${
-                            isOutbound ? 'bg-wa-bubbleOut text-white rounded-tr-none' : 'bg-wa-bubbleIn text-slate-200 rounded-tl-none'
+                          className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-xs relative ${
+                            isOutbound ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-900 border border-slate-200 rounded-tl-none'
                           }`}
                         >
                           {!isOutbound && (
-                            <p className="font-bold text-[10px] text-emerald-400 mb-1">
+                            <p className="font-bold text-[10px] text-emerald-700 mb-1">
                               {msg.sender?.name || selectedConversation.customerName || 'Customer'}
                             </p>
                           )}
@@ -501,55 +501,55 @@ export default function SharedInbox() {
                               href={msg.mediaUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 p-2 rounded-lg bg-slate-950/40 border border-slate-800 mb-2 hover:bg-slate-900"
+                              className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 mb-2 hover:bg-slate-100"
                             >
-                              <FileIcon className="w-4 h-4 text-emerald-400" />
-                              <span className="underline truncate">{msg.filename || 'Document Attachment'}</span>
+                              <FileIcon className="w-4 h-4 text-emerald-600" />
+                              <span className="underline truncate font-medium">{msg.filename || 'Document Attachment'}</span>
                             </a>
                           )}
 
                           {mType === 'location' && msg.location && (
-                            <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-800 mb-2">
-                              <p className="font-bold text-emerald-400 flex items-center gap-1">
+                            <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 mb-2">
+                              <p className="font-bold text-emerald-700 flex items-center gap-1">
                                 <MapPin className="w-3.5 h-3.5" /> {msg.location.name}
                               </p>
-                              <p className="text-[10px] text-slate-400">{msg.location.latitude}, {msg.location.longitude}</p>
+                              <p className="text-[10px] text-slate-500">{msg.location.latitude}, {msg.location.longitude}</p>
                             </div>
                           )}
 
                           {mType === 'contacts' && msg.contactCard && (
-                            <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-800 mb-2">
-                              <p className="font-bold text-white flex items-center gap-1">
-                                <ContactIcon className="w-3.5 h-3.5 text-teal-400" /> {msg.contactCard.name}
+                            <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 mb-2">
+                              <p className="font-bold text-slate-900 flex items-center gap-1">
+                                <ContactIcon className="w-3.5 h-3.5 text-teal-600" /> {msg.contactCard.name}
                               </p>
-                              <p className="text-[10px] text-slate-400 font-mono">{msg.contactCard.phone}</p>
+                              <p className="text-[10px] text-slate-500 font-mono">{msg.contactCard.phone}</p>
                             </div>
                           )}
 
-                          {mBody && <p className="whitespace-pre-wrap leading-relaxed">{mBody}</p>}
+                          {mBody && <p className="whitespace-pre-wrap leading-relaxed font-normal">{mBody}</p>}
 
-                          <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-slate-400">
+                          <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
                             <span>
                               {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isOutbound && (
                               <span>
                                 {mStatus === 'read' ? (
-                                  <CheckCheck className="w-3 h-3 text-sky-400" />
+                                  <CheckCheck className="w-3 h-3 text-white" />
                                 ) : mStatus === 'delivered' ? (
-                                  <CheckCheck className="w-3 h-3 text-slate-400" />
+                                  <CheckCheck className="w-3 h-3 text-emerald-200" />
                                 ) : mStatus === 'failed' ? (
-                                  <XCircle className="w-3 h-3 text-rose-400" />
+                                  <XCircle className="w-3 h-3 text-rose-300" />
                                 ) : (
-                                  <Check className="w-3 h-3 text-slate-400" />
+                                  <Check className="w-3 h-3 text-emerald-200" />
                                 )}
                               </span>
                             )}
                           </div>
 
                           {/* Quick Message Actions */}
-                          <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-700 shadow">
-                            <button onClick={() => handleCopyText(mBody)} className="p-1 hover:text-emerald-400" title="Copy text">
+                          <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
+                            <button onClick={() => handleCopyText(mBody)} className="p-1 text-slate-600 hover:text-emerald-600" title="Copy text">
                               <Copy className="w-3 h-3" />
                             </button>
                           </div>
@@ -563,16 +563,16 @@ export default function SharedInbox() {
 
               {/* Attachment Drawer Popover */}
               {showAttachmentMenu && (
-                <div className="absolute bottom-16 left-4 bg-slate-900 border border-slate-800 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 z-20 w-48 text-xs">
+                <div className="absolute bottom-16 left-4 bg-white border border-slate-200 rounded-2xl p-2 shadow-lg flex flex-col gap-1 z-20 w-48 text-xs">
                   <button
                     onClick={() => {
                       setMediaType('image');
                       setShowMediaModal(true);
                       setShowAttachmentMenu(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-xl text-slate-200"
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 rounded-xl text-slate-700 font-medium"
                   >
-                    <ImageIcon className="w-4 h-4 text-emerald-400" /> Send Image
+                    <ImageIcon className="w-4 h-4 text-emerald-600" /> Send Image
                   </button>
                   <button
                     onClick={() => {
@@ -580,37 +580,37 @@ export default function SharedInbox() {
                       setShowMediaModal(true);
                       setShowAttachmentMenu(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-xl text-slate-200"
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 rounded-xl text-slate-700 font-medium"
                   >
-                    <FileIcon className="w-4 h-4 text-sky-400" /> Send PDF / Document
+                    <FileIcon className="w-4 h-4 text-sky-600" /> Send PDF / Document
                   </button>
                   <button
                     onClick={() => {
                       setShowLocationModal(true);
                       setShowAttachmentMenu(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-xl text-slate-200"
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 rounded-xl text-slate-700 font-medium"
                   >
-                    <MapPin className="w-4 h-4 text-rose-400" /> Send Location
+                    <MapPin className="w-4 h-4 text-rose-600" /> Send Location
                   </button>
                   <button
                     onClick={() => {
                       setShowContactModal(true);
                       setShowAttachmentMenu(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-xl text-slate-200"
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 rounded-xl text-slate-700 font-medium"
                   >
-                    <ContactIcon className="w-4 h-4 text-amber-400" /> Send Contact Card
+                    <ContactIcon className="w-4 h-4 text-amber-600" /> Send Contact Card
                   </button>
                 </div>
               )}
 
               {/* Reply Input Bar */}
-              <form onSubmit={(e) => handleSendMessage(e, 'text')} className="p-3 border-t border-slate-800 bg-slate-950 flex items-center gap-2">
+              <form onSubmit={(e) => handleSendMessage(e, 'text')} className="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                  className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
@@ -620,7 +620,7 @@ export default function SharedInbox() {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Type WhatsApp message..."
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600"
                 />
 
                 <Button type="submit" loading={sendingMsg} icon={Send} size="sm">
@@ -630,7 +630,7 @@ export default function SharedInbox() {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
-              <MessageCircle className="w-10 h-10 text-slate-700 mb-2" />
+              <MessageCircle className="w-10 h-10 text-slate-400 mb-2" />
               Select a conversation from the left to open live WhatsApp chat.
             </div>
           )}
@@ -638,35 +638,35 @@ export default function SharedInbox() {
 
         {/* Section 7: Customer Profile Inspector (Right Sidebar) */}
         {selectedConversation && (
-          <div className="w-72 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col flex-shrink-0 space-y-4 overflow-y-auto scrollbar-thin">
+          <div className="w-72 bg-white border border-slate-200 rounded-2xl p-4 flex flex-col flex-shrink-0 space-y-4 overflow-y-auto scrollbar-thin shadow-xs">
             <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <User className="w-4 h-4 text-emerald-400" /> Customer Profile
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-emerald-600" /> Customer Profile
               </h4>
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-2">
-                <p className="font-semibold text-white">{selectedConversation.customerName}</p>
-                <p className="text-slate-400 flex items-center gap-1 font-mono">
-                  <Phone className="w-3 h-3" /> {selectedConversation.waId || selectedConversation.customerPhone}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                <p className="font-bold text-slate-900">{selectedConversation.customerName}</p>
+                <p className="text-slate-600 flex items-center gap-1 font-mono">
+                  <Phone className="w-3 h-3 text-slate-400" /> {selectedConversation.waId || selectedConversation.customerPhone}
                 </p>
 
-                <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+                <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-2 text-[10px] text-slate-600">
                   <div>
-                    <span className="block font-bold text-white">First Message</span>
+                    <span className="block font-bold text-slate-900">First Message</span>
                     {new Date(customerProfile?.firstMessageAt || selectedConversation.createdAt).toLocaleDateString()}
                   </div>
                   <div>
-                    <span className="block font-bold text-white">Last Seen</span>
+                    <span className="block font-bold text-slate-900">Last Seen</span>
                     {new Date(customerProfile?.lastSeen || selectedConversation.updatedAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
                   </div>
                   <div>
-                    <span className="block font-bold text-white">Conversations</span>
+                    <span className="block font-bold text-slate-900">Conversations</span>
                     {customerProfile?.conversationCount || 1}
                   </div>
                   <div>
-                    <span className="block font-bold text-white">Media Files</span>
+                    <span className="block font-bold text-slate-900">Media Files</span>
                     {customerProfile?.mediaCount || 0}
                   </div>
                 </div>
@@ -675,8 +675,8 @@ export default function SharedInbox() {
 
             {/* Internal Team Notes */}
             <div className="flex-1 flex flex-col">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <StickyNote className="w-4 h-4 text-amber-400" /> Private Notes
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <StickyNote className="w-4 h-4 text-amber-600" /> Private Notes
               </h4>
 
               <form onSubmit={handleAddNote} className="mb-3">
@@ -685,7 +685,7 @@ export default function SharedInbox() {
                   value={internalNoteText}
                   onChange={(e) => setInternalNoteText(e.target.value)}
                   placeholder="Add note for team agents..."
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50 mb-1"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-600 mb-1"
                 />
                 <Button type="submit" size="sm" variant="secondary" className="w-full">
                   Post Note
@@ -694,9 +694,9 @@ export default function SharedInbox() {
 
               <div className="space-y-2 overflow-y-auto max-h-48 scrollbar-thin">
                 {(selectedConversation.internalNotes || []).map((note, idx) => (
-                  <div key={idx} className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
-                    <p className="text-amber-300 font-medium">{note.text}</p>
-                    <p className="text-[10px] text-amber-400/60 text-right">
+                  <div key={idx} className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
+                    <p className="text-amber-900 font-medium">{note.text}</p>
+                    <p className="text-[10px] text-amber-700 text-right font-medium">
                       {note.authorName} • {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>

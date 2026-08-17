@@ -11,14 +11,14 @@ export default function Button({
   className = '',
   ...props
 }) {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-50 disabled:cursor-not-allowed select-none';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed select-none';
 
   const variants = {
-    primary: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold shadow-lg shadow-emerald-500/20 focus:ring-emerald-400',
-    secondary: 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 focus:ring-slate-500',
-    outline: 'bg-transparent border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 focus:ring-emerald-500',
-    danger: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20 focus:ring-rose-500',
-    ghost: 'bg-transparent text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 focus:ring-slate-700',
+    primary: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs focus:ring-emerald-600',
+    secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 focus:ring-slate-400',
+    outline: 'bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-600',
+    danger: 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs focus:ring-rose-600',
+    ghost: 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:ring-slate-300',
   };
 
   const sizes = {

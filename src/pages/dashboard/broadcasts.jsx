@@ -160,11 +160,11 @@ export default function BroadcastsManager() {
 
   const getStatusBadge = (status) => {
     const badges = {
-      COMPLETED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-      PROCESSING: 'bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse',
-      SCHEDULED: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      PAUSED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
-      DRAFT: 'bg-slate-700 text-slate-300 border-slate-600',
+      COMPLETED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      PROCESSING: 'bg-blue-100 text-blue-800 border-blue-200 animate-pulse',
+      SCHEDULED: 'bg-amber-100 text-amber-800 border-amber-200',
+      PAUSED: 'bg-rose-100 text-rose-800 border-rose-200',
+      DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
     };
 
     return (
@@ -180,10 +180,10 @@ export default function BroadcastsManager() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Send className="w-6 h-6 text-emerald-400" /> WhatsApp Campaign Manager
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <Send className="w-6 h-6 text-emerald-600" /> WhatsApp Campaign Manager
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Create audience target broadcasts, schedule dispatches, and track conversion rates.
             </p>
           </div>
@@ -194,52 +194,52 @@ export default function BroadcastsManager() {
 
         {/* Campaign Metrics Overview */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
               <Send className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Total Campaigns</p>
-              <h3 className="text-lg font-bold text-white">{summary.totalCampaigns}</h3>
+              <p className="text-xs text-slate-500 font-medium">Total Campaigns</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.totalCampaigns}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Completed Dispatches</p>
-              <h3 className="text-lg font-bold text-white">{summary.completedCount}</h3>
+              <p className="text-xs text-slate-500 font-medium">Completed Dispatches</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.completedCount}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Scheduled Campaigns</p>
-              <h3 className="text-lg font-bold text-white">{summary.scheduledCount}</h3>
+              <p className="text-xs text-slate-500 font-medium">Scheduled Campaigns</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.scheduledCount}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-700">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Dispatched Messages</p>
-              <h3 className="text-lg font-bold text-white">{summary.totalSent}</h3>
+              <p className="text-xs text-slate-500 font-medium">Dispatched Messages</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.totalSent}</h3>
             </div>
           </Card>
         </div>
 
         {/* Campaigns List */}
-        <Card title={`Campaign Roster (${broadcasts.length})`}>
+        <Card title={`Campaign Roster (${broadcasts.length})`} className="shadow-xs">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="text-[11px] text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Campaign Name</th>
                   <th className="px-4 py-3">Type & Template</th>
@@ -249,12 +249,12 @@ export default function BroadcastsManager() {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-medium">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {broadcasts.map((b) => (
-                  <tr key={b._id} className="hover:bg-slate-850/50 transition-colors">
+                  <tr key={b._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-white text-xs">{b.name}</p>
-                      <p className="text-[10px] text-slate-400 font-normal">
+                      <p className="font-bold text-slate-900 text-xs">{b.name}</p>
+                      <p className="text-[10px] text-slate-500 font-normal">
                         {new Date(b.createdAt).toLocaleDateString()}
                       </p>
                     </td>

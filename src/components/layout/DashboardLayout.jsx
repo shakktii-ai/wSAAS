@@ -17,9 +17,9 @@ export default function DashboardLayout({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
-        <p className="text-sm font-medium tracking-wide animate-pulse">Loading SyncChat Enterprise Platform...</p>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center text-slate-700">
+        <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
+        <p className="text-sm font-medium tracking-wide animate-pulse">Loading Shakktii Platform...</p>
       </div>
     );
   }
@@ -29,11 +29,11 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex selection:bg-emerald-600 selection:text-white">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar />
-        <main className="flex-1 p-6 overflow-y-auto bg-slate-950">{children}</main>
+        <main className="flex-1 p-6 overflow-y-auto bg-slate-50/70">{children}</main>
       </div>
     </div>
   );

@@ -172,11 +172,11 @@ export default function VisualAutomationBuilder() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Zap className="w-6 h-6 text-emerald-400" /> Visual No-Code Automation Builder
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <Zap className="w-6 h-6 text-emerald-600" /> Visual Automation Builder
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Design visual chatbot workflows, multi-step keyword flows, condition branching, and API integrations.
+            <p className="text-xs text-slate-600 mt-1">
+              Design visual multi-step event triggers, keyword rules, auto-replies, and agent assignments.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -188,33 +188,33 @@ export default function VisualAutomationBuilder() {
 
         {/* Top Metric Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
               <GitBranch className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Visual Workflows</p>
-              <h3 className="text-lg font-bold text-white">{summary.totalFlows}</h3>
+              <p className="text-xs text-slate-500 font-medium">Visual Workflows</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.totalFlows}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Published Workflows</p>
-              <h3 className="text-lg font-bold text-white">{summary.publishedCount}</h3>
+              <p className="text-xs text-slate-500 font-medium">Published Workflows</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.publishedCount}</h3>
             </div>
           </Card>
 
-          <Card className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+          <Card className="flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-400">Total Executions</p>
-              <h3 className="text-lg font-bold text-white">{summary.totalExecutions}</h3>
+              <p className="text-xs text-slate-500 font-medium">Total Executions</p>
+              <h3 className="text-lg font-bold text-slate-900">{summary.totalExecutions}</h3>
             </div>
           </Card>
         </div>
@@ -222,34 +222,34 @@ export default function VisualAutomationBuilder() {
         {/* Main Canvas Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-16rem)]">
           {/* Workflows Directory Sidebar */}
-          <Card className="flex flex-col space-y-3 overflow-hidden">
-            <h3 className="font-bold text-white text-xs uppercase tracking-wider">Flows Roster</h3>
+          <Card className="flex flex-col space-y-3 overflow-hidden shadow-xs">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Flows Roster</h3>
             <div className="flex-1 overflow-y-auto space-y-2 scrollbar-thin">
               {flows.map((f) => {
                 const isSelected = selectedFlow?._id === f._id;
                 return (
                   <div
                     key={f._id}
-                    onClick={() => loadThreadDetails(f._id)}
+                    onClick={() => loadFlowDetails(f._id)}
                     className={`p-3 rounded-xl border cursor-pointer transition-colors ${
                       isSelected
-                        ? 'bg-emerald-500/10 border-emerald-500/40'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                        ? 'bg-emerald-50 border-emerald-600 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <p className="font-bold text-white text-xs truncate">{f.name}</p>
+                      <p className="font-bold text-slate-900 text-xs truncate">{f.name}</p>
                       <span
                         className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                           f.status === 'PUBLISHED'
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200'
                         }`}
                       >
                         {f.status}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-mono mt-1">Keyword: &quot;{f.triggerKeyword}&quot;</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1">Keyword: &quot;{f.triggerKeyword}&quot;</p>
                   </div>
                 );
               })}
@@ -257,15 +257,15 @@ export default function VisualAutomationBuilder() {
           </Card>
 
           {/* Visual Canvas Center Viewport */}
-          <div className="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl flex flex-col overflow-hidden relative">
+          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden relative shadow-xs">
             {selectedFlow ? (
               <>
                 {/* Canvas Control Header */}
-                <div className="h-12 px-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                <div className="h-12 px-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                   <div>
-                    <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                       {selectedFlow.name}
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-mono text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold border border-emerald-200">
                         v{selectedFlow.version || 1}
                       </span>
                     </h3>
@@ -291,7 +291,7 @@ export default function VisualAutomationBuilder() {
                 </div>
 
                 {/* Canvas Drop Target Area */}
-                <div className="flex-1 p-6 bg-slate-950/90 overflow-y-auto space-y-4 relative scrollbar-thin">
+                <div className="flex-1 p-6 bg-slate-50/50 overflow-y-auto space-y-4 relative scrollbar-thin">
                   {nodes.map((node, index) => {
                     const isSelected = selectedNode?.id === node.id;
                     return (
@@ -300,12 +300,12 @@ export default function VisualAutomationBuilder() {
                           onClick={() => setSelectedNode(node)}
                           className={`p-4 rounded-2xl border cursor-pointer transition-all max-w-md mx-auto relative ${
                             isSelected
-                              ? 'bg-emerald-500/10 border-emerald-500 shadow-lg shadow-emerald-500/10'
-                              : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                              ? 'bg-emerald-50 border-emerald-600 shadow-xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
                           }`}
                         >
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                               {node.type}
                             </span>
                             <button
@@ -313,22 +313,22 @@ export default function VisualAutomationBuilder() {
                                 e.stopPropagation();
                                 handleDeleteNode(node.id);
                               }}
-                              className="text-slate-500 hover:text-rose-400"
+                              className="text-slate-400 hover:text-rose-600"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
-                          <p className="font-semibold text-white text-xs mb-1">{node.label || node.type}</p>
+                          <p className="font-bold text-slate-900 text-xs mb-1">{node.label || node.type}</p>
                           {node.data?.text && (
-                            <p className="text-xs text-slate-300 font-mono bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+                            <p className="text-xs text-slate-800 font-mono bg-slate-50 p-2 rounded-lg border border-slate-200">
                               &quot;{node.data.text}&quot;
                             </p>
                           )}
                         </div>
 
                         {index < nodes.length - 1 && (
-                          <div className="flex justify-center my-1 text-slate-600">
+                          <div className="flex justify-center my-1 text-slate-400">
                             <ArrowRight className="w-5 h-5 rotate-90" />
                           </div>
                         )}
@@ -338,45 +338,45 @@ export default function VisualAutomationBuilder() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">
+              <div className="flex-1 flex items-center justify-center text-slate-500 text-xs font-medium">
                 Select a visual flow from the left roster to view canvas.
               </div>
             )}
           </div>
 
           {/* Node Palette & Property Inspector (Right Sidebar) */}
-          <Card className="flex flex-col space-y-4 overflow-hidden">
+          <Card className="flex flex-col space-y-4 overflow-hidden shadow-xs">
             <div>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Plus className="w-4 h-4 text-emerald-400" /> Add Step Node
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-emerald-600" /> Add Step Node
               </h4>
               <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                <button onClick={() => handleAddNode('message')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('message')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   💬 Send Message
                 </button>
-                <button onClick={() => handleAddNode('template')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('template')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   📜 Send Template
                 </button>
-                <button onClick={() => handleAddNode('condition')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('condition')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   🔀 Condition
                 </button>
-                <button onClick={() => handleAddNode('delay')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('delay')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   ⏱️ Delay Wait
                 </button>
-                <button onClick={() => handleAddNode('tag_contact')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('tag_contact')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   🏷️ Tag Contact
                 </button>
-                <button onClick={() => handleAddNode('assign_agent')} className="p-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-200 border border-slate-800 text-left">
+                <button onClick={() => handleAddNode('assign_agent')} className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 text-left font-medium">
                   👤 Assign Agent
                 </button>
               </div>
             </div>
 
             {selectedNode && (
-              <div className="flex-1 border-t border-slate-800 pt-3 space-y-3 overflow-y-auto scrollbar-thin text-xs">
-                <h4 className="font-bold text-white uppercase tracking-wider text-[11px]">Node Property Inspector</h4>
+              <div className="flex-1 border-t border-slate-200 pt-3 space-y-3 overflow-y-auto scrollbar-thin text-xs">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">Node Property Inspector</h4>
                 <div>
-                  <label className="block text-slate-400 mb-1">Step Label</label>
+                  <label className="block text-slate-700 font-semibold mb-1">Step Label</label>
                   <input
                     type="text"
                     value={selectedNode.label}
@@ -385,18 +385,18 @@ export default function VisualAutomationBuilder() {
                       setNodes((prev) => prev.map((n) => (n.id === selectedNode.id ? { ...n, label: val } : n)));
                       setSelectedNode((prev) => ({ ...prev, label: val }));
                     }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                   />
                 </div>
 
                 {selectedNode.type === 'message' && (
                   <div>
-                    <label className="block text-slate-400 mb-1">Message Text Body</label>
+                    <label className="block text-slate-700 font-semibold mb-1">Message Text Body</label>
                     <textarea
                       rows={3}
                       value={selectedNode.data?.text || ''}
                       onChange={(e) => handleUpdateSelectedNodeData('text', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                     />
                   </div>
                 )}
@@ -409,26 +409,26 @@ export default function VisualAutomationBuilder() {
         <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create New Visual Automation Flow">
           <form onSubmit={handleCreateFlow} className="space-y-4 text-xs">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Flow Name *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Flow Name *</label>
               <input
                 type="text"
                 required
                 value={flowName}
                 onChange={(e) => setFlowName(e.target.value)}
                 placeholder="Welcome Onboarding Flow"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Trigger Keyword *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Trigger Keyword *</label>
               <input
                 type="text"
                 required
                 value={triggerKeyword}
                 onChange={(e) => setTriggerKeyword(e.target.value)}
                 placeholder="hi or start or hello"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
               />
             </div>
 

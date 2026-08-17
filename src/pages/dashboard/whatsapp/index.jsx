@@ -199,10 +199,10 @@ export default function WhatsAppHub() {
         {/* Page Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Zap className="w-5 h-5 text-emerald-400" /> WhatsApp Business Integration
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <Zap className="w-5 h-5 text-emerald-600" /> WhatsApp Business Integration
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Connect your WhatsApp Business Account via Meta Embedded Signup (AiSensy, WATI & Interakt standard)
             </p>
           </div>
@@ -220,14 +220,14 @@ export default function WhatsAppHub() {
         </div>
 
         {/* Main Status & Signup Card */}
-        <Card className="border border-slate-800 bg-slate-900/80 backdrop-blur-xl relative overflow-hidden p-6">
+        <Card className="border border-slate-200 bg-white relative overflow-hidden p-6 shadow-xs">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
                   isConnected
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/20'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-slate-100 text-slate-400 border border-slate-200'
                 }`}
               >
                 <Phone className="w-7 h-7" />
@@ -235,20 +235,20 @@ export default function WhatsAppHub() {
 
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white">
+                  <h2 className="text-lg font-bold text-slate-900">
                     {isConnected ? account.businessName || 'Connected Business WABA' : 'No WhatsApp Account Connected'}
                   </h2>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
                       isConnected
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}
                   >
                     {isConnected ? '● Connected & Active' : 'Disconnected'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-slate-600 mt-1">
                   {isConnected
                     ? `Live Phone Number: ${account.displayPhoneNumber} • WABA ID: ${account.wabaId}`
                     : 'Click "Connect WhatsApp Business" below to launch Meta Embedded Signup'}
@@ -266,7 +266,7 @@ export default function WhatsAppHub() {
                   size="lg"
                   loading={connecting}
                   onClick={launchEmbeddedSignup}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold shadow-lg shadow-emerald-500/20"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs"
                 >
                   <MessageSquare className="w-5 h-5 mr-2" /> Connect WhatsApp Business
                 </Button>
@@ -278,52 +278,52 @@ export default function WhatsAppHub() {
         {/* Account Details & Health Grid */}
         {isConnected && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+            <Card className="p-4 bg-white border border-slate-200 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
                   <Phone className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500">Phone Number ID</p>
-                  <p className="text-xs font-mono font-bold text-white mt-0.5">{account.phoneNumberId}</p>
+                  <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">{account.phoneNumberId}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+            <Card className="p-4 bg-white border border-slate-200 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500">WABA ID</p>
-                  <p className="text-xs font-mono font-bold text-white mt-0.5">{account.wabaId}</p>
+                  <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">{account.wabaId}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+            <Card className="p-4 bg-white border border-slate-200 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
                   <Award className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500">Quality Rating</p>
-                  <p className="text-xs font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
+                  <p className="text-xs font-bold text-emerald-700 mt-0.5 flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5" /> {account.qualityRating}
                   </p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-4 bg-slate-900/60 border border-slate-800">
+            <Card className="p-4 bg-white border border-slate-200 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-500">Synced Templates</p>
-                  <p className="text-xs font-bold text-white mt-0.5">{account.templateCount} Templates</p>
+                  <p className="text-xs font-bold text-slate-900 mt-0.5">{account.templateCount} Templates</p>
                 </div>
               </div>
             </Card>
@@ -331,26 +331,26 @@ export default function WhatsAppHub() {
         )}
 
         {/* Integration Instructions & Enterprise Features */}
-        <Card className="p-6 bg-slate-900/60 border border-slate-800">
-          <h3 className="text-sm font-bold text-white mb-3">Enterprise Meta Cloud API Features</h3>
+        <Card className="p-6 bg-white border border-slate-200 shadow-xs">
+          <h3 className="text-sm font-bold text-slate-900 mb-3">Enterprise Meta Cloud API Features</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
-              <p className="font-semibold text-emerald-400">⚡ 1-Click Embedded Signup</p>
-              <p className="text-slate-400">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <p className="font-bold text-emerald-700">⚡ 1-Click Embedded Signup</p>
+              <p className="text-slate-600">
                 Customers connect their Meta WhatsApp Business Account directly without technical setup.
               </p>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
-              <p className="font-semibold text-teal-400">🔄 Auto Template Sync</p>
-              <p className="text-slate-400">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <p className="font-bold text-teal-700">🔄 Auto Template Sync</p>
+              <p className="text-slate-600">
                 Synchronizes pre-approved Meta message templates directly into local collection.
               </p>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1">
-              <p className="font-semibold text-purple-400">🔒 Token Security & Webhooks</p>
-              <p className="text-slate-400">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+              <p className="font-bold text-purple-700">🔒 Token Security & Webhooks</p>
+              <p className="text-slate-600">
                 Access tokens are stored encrypted server-side; webhooks deliver real-time messages.
               </p>
             </div>
@@ -361,29 +361,29 @@ export default function WhatsAppHub() {
       {/* Manual Connection Modal Fallback */}
       <Modal isOpen={showManualModal} onClose={() => setShowManualModal(false)} title="Connect Meta WABA Credentials">
         <form onSubmit={handleManualConnect} className="space-y-4 text-xs">
-          <p className="text-slate-400">
+          <p className="text-slate-600 font-medium">
             Enter your Meta Phone Number ID and WABA ID to complete instant connection:
           </p>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">Phone Number ID</label>
+            <label className="block text-slate-700 font-semibold mb-1">Phone Number ID</label>
             <input
               type="text"
               value={manualPhoneId}
               onChange={(e) => setManualPhoneId(e.target.value)}
               placeholder="e.g. 100000000000000"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1">WABA ID</label>
+            <label className="block text-slate-700 font-semibold mb-1">WABA ID</label>
             <input
               type="text"
               value={manualWabaId}
               onChange={(e) => setManualWabaId(e.target.value)}
               placeholder="e.g. 200000000000000"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
             />
           </div>
 
