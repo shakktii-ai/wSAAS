@@ -90,13 +90,13 @@ export default function WhatsAppHub() {
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
             embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
-            console.log('[META_OAUTH_DEBUG]', {
+            console.log('[META_OAUTH_FLOW]', {
+              stage: 'EMBEDDED_SIGNUP_FINISH',
               hasWabaId: Boolean(waba_id),
               hasPhoneNumberId: Boolean(phone_number_id),
-              sessionCaptured: true,
             });
           } else if (data.event === 'CANCEL') {
-            console.log('[META_OAUTH_DEBUG] Session CANCELLED');
+            console.log('[META_OAUTH_FLOW] Embedded Signup session CANCELLED');
             setConnecting(false);
           }
         }
@@ -115,11 +115,11 @@ export default function WhatsAppHub() {
       const redirectUri = payload.redirectUri || getRedirectUri();
       const finalPayload = { ...payload, redirectUri };
 
-      console.log('[META_OAUTH_DEBUG]', {
+      console.log('[META_OAUTH_FLOW]', {
+        stage: 'EXCHANGE_STARTED',
         hasCode: Boolean(finalPayload.code),
         hasWabaId: Boolean(finalPayload.wabaId),
         hasPhoneNumberId: Boolean(finalPayload.phoneNumberId),
-        exchangeStarted: true,
       });
 
       const res = await api.post('/meta/exchange-token', finalPayload);
@@ -155,6 +155,19 @@ export default function WhatsAppHub() {
       console.warn('[Meta Embedded Signup] Start endpoint warning:', e.message);
     }
 
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || process.env.META_EMBEDDED_SIGNUP_CONFIG_ID;
+
+    console.log('[META_OAUTH_FLOW]', {
+      stage: 'LOGIN_STARTED',
+      appId,
+      configIdPresent: Boolean(configId),
+      responseType: 'code',
+      overrideDefaultResponseType: true,
+      currentOrigin: typeof window !== 'undefined' ? window.location.origin : '',
+      currentPath: typeof window !== 'undefined' ? window.location.pathname : '',
+      timestamp: new Date().toISOString(),
+    });
+
     const initAndLogin = () => {
       if (appId && window.FB) {
         try {
@@ -167,17 +180,31 @@ export default function WhatsAppHub() {
         } catch (e) {}
       }
 
+      const loginOptions = {
+        scope: 'whatsapp_business_management,whatsapp_business_messaging',
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: '',
+          sessionInfoVersion: '2',
+        },
+      };
+      if (configId) {
+        loginOptions.config_id = configId;
+      }
+
       window.FB.login(
         (response) => {
-          console.log('[META_OAUTH_DEBUG]', {
-            hasCode: Boolean(response?.authResponse?.code),
-            hasAccessToken: Boolean(response?.authResponse?.accessToken),
-            authStatus: response?.status,
-            exchangeStarted: false,
-          });
-
           const code = response?.authResponse?.code;
           const accessToken = response?.authResponse?.accessToken;
+
+          console.log('[META_OAUTH_FLOW]', {
+            stage: 'FB_LOGIN_CALLBACK',
+            hasCode: Boolean(code),
+            hasAccessToken: Boolean(accessToken),
+            authStatus: response?.status,
+          });
 
           if ((code || accessToken) && !isExchangingRef.current) {
             isExchangingRef.current = true;
@@ -195,17 +222,7 @@ export default function WhatsAppHub() {
             }
           }
         },
-        {
-          scope: 'whatsapp_business_management,whatsapp_business_messaging',
-          response_type: 'code',
-          override_default_response_type: true,
-          redirect_uri: redirectUri,
-          extras: {
-            setup: {},
-            featureType: '',
-            sessionInfoVersion: '2',
-          },
-        }
+        loginOptions
       );
     };
 

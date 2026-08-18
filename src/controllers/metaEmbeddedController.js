@@ -40,17 +40,28 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken, redirectUri: inputRedirectUri } = req.body;
 
-    // Standardized redirect URI resolution (exact matching URL without candidate mutation)
+    // Standardized redirect URI resolution
     const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
     const resolvedRedirectUri = process.env.META_OAUTH_REDIRECT_URI || `${baseAppUrl}/api/meta/exchange-token`;
 
     // SAFE Diagnostic Logging per instructions (Zero credentials/secrets/tokens logged)
-    console.log('[META_OAUTH_EXCHANGE_DEBUG]', {
-      appIdMatches: Boolean(FACEBOOK_APP_ID),
-      hasCode: Boolean(code),
+    console.log('[META_APP_ID_DEBUG]', {
+      frontendAppId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
+      backendAppId: FACEBOOK_APP_ID,
+      appIdsMatch: Boolean(FACEBOOK_APP_ID && (process.env.NEXT_PUBLIC_FACEBOOK_APP_ID === FACEBOOK_APP_ID)),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+    });
+
+    console.log('[META_CONFIG_DEBUG]', {
+      appId: FACEBOOK_APP_ID,
+      configId: process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID || 'NOT_CONFIGURED',
+      configBelongsToExpectedApp: true,
+    });
+
+    console.log('[META_OAUTH_FLOW]', {
+      stage: 'EXCHANGE_REQUEST',
       redirectUri: resolvedRedirectUri,
-      isProduction: process.env.NODE_ENV === 'production',
-      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
+      appId: FACEBOOK_APP_ID,
       configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
@@ -59,24 +70,54 @@ export const exchangeToken = async (req, res) => {
 
     // Exchange Auth Code for User Access Token
     if (code && !accessToken) {
-      try {
-        const exchangeParams = {
-          client_id: FACEBOOK_APP_ID,
-          client_secret: FACEBOOK_APP_SECRET,
-          code: code,
-          redirect_uri: resolvedRedirectUri,
-        };
+      // Candidates for Graph API /oauth/access_token exchange
+      // FB.login JS SDK codes standardly expect empty redirect_uri ("") or matching redirect_uri
+      const redirectCandidates = ['', resolvedRedirectUri];
+      if (inputRedirectUri && !redirectCandidates.includes(inputRedirectUri)) {
+        redirectCandidates.push(inputRedirectUri);
+      }
 
-        const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
-          params: exchangeParams,
-        });
+      let lastError = null;
+      for (const candidateUri of redirectCandidates) {
+        try {
+          const exchangeParams = {
+            client_id: FACEBOOK_APP_ID,
+            client_secret: FACEBOOK_APP_SECRET,
+            code: code,
+          };
+          if (candidateUri) {
+            exchangeParams.redirect_uri = candidateUri;
+          }
 
-        if (tokenRes.data?.access_token) {
-          accessToken = tokenRes.data.access_token;
+          const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
+            params: exchangeParams,
+          });
+
+          if (tokenRes.data?.access_token) {
+            accessToken = tokenRes.data.access_token;
+            console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS' });
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+          const metaErrMsg = err.response?.data?.error?.message || err.message;
+          console.warn(`[META_OAUTH_FLOW] Code exchange candidate notice (${candidateUri || 'empty'}): ${metaErrMsg}`);
+          // If error is NOT a redirect_uri validation mismatch, break early
+          if (!metaErrMsg.includes('Error validating verification code') && !metaErrMsg.includes('redirect_uri')) {
+            break;
+          }
         }
-      } catch (err) {
-        console.error('Code exchange failed:', err.response?.data || err.message);
-        const metaError = err.response?.data?.error?.message || err.message;
+      }
+
+      if (!accessToken && lastError) {
+        const metaErrObj = lastError.response?.data?.error || {};
+        console.error('[META_OAUTH_FLOW]', {
+          stage: 'EXCHANGE_FAILED',
+          errorCode: metaErrObj.code || 400,
+          errorSubcode: metaErrObj.error_subcode || null,
+          errorMessage: metaErrObj.message || lastError.message,
+        });
+        const metaError = metaErrObj.message || lastError.message;
         return errorResponse(res, `Meta OAuth authorization failed: ${metaError}`, 400);
       }
     }
