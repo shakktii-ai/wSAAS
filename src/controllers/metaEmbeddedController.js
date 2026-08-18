@@ -42,6 +42,7 @@ export const startEmbeddedSignup = async (req, res) => {
         responseType: 'code',
         extras: {
           setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
           sessionInfoVersion: '3',
           version: 'v4',
         },

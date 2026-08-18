@@ -317,11 +317,12 @@ export default function SaaSOnboardingWizard() {
 
       const apiExtras = startResData?.extras || {};
       const sessionInfoVersion = apiExtras.sessionInfoVersion || '3';
+      const featureType = apiExtras.featureType || 'whatsapp_business_app_onboarding';
       const version = apiExtras.version || 'v4';
 
       console.log('[META_SESSION_VERSION]', {
         sessionInfoVersion,
-        featureTypePresent: Boolean(apiExtras.featureType),
+        featureType,
         version,
         configIdPresent: Boolean(configId),
         responseType: 'code',
@@ -335,7 +336,7 @@ export default function SaaSOnboardingWizard() {
         overrideDefaultResponseType: true,
         esVersion: version,
         sessionInfoVersion,
-        featureTypePresent: Boolean(apiExtras.featureType),
+        featureType: featureType,
         origin: typeof window !== 'undefined' ? window.location.origin : '',
         pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
@@ -352,13 +353,11 @@ export default function SaaSOnboardingWizard() {
         override_default_response_type: true,
         extras: {
           setup: apiExtras.setup || {},
+          featureType: featureType,
           sessionInfoVersion: sessionInfoVersion,
           version: version,
         },
       };
-      if (apiExtras.featureType) {
-        loginOptions.extras.featureType = apiExtras.featureType;
-      }
       if (configId) {
         loginOptions.config_id = configId;
       }
