@@ -14,8 +14,15 @@ const FACEBOOK_APP_SECRET = process.env.FACEBOOK_CLIENT_SECRET || process.env.ME
  */
 export const startEmbeddedSignup = async (req, res) => {
   try {
+    const configId =
+      process.env.META_EMBEDDED_SIGNUP_CONFIG_ID ||
+      process.env.META_CONFIG_ID ||
+      process.env.NEXT_PUBLIC_META_CONFIG_ID ||
+      '';
+
     return successResponse(res, {
       appId: FACEBOOK_APP_ID,
+      configId: configId || undefined,
       apiVersion: META_API_VERSION,
       scope: 'whatsapp_business_management,whatsapp_business_messaging',
       responseType: 'code',
@@ -47,7 +54,7 @@ export const exchangeToken = async (req, res) => {
     // TASK 4: SAFE CONFIG AUDIT LOG
     console.log('[META_CONFIG_AUDIT]', {
       appId: FACEBOOK_APP_ID,
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
       configIdMatchesExpectedApp: true,
     });
 
@@ -56,16 +63,16 @@ export const exchangeToken = async (req, res) => {
       frontendAppId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
       backendAppId: FACEBOOK_APP_ID,
       appIdsMatch: Boolean(FACEBOOK_APP_ID && (process.env.NEXT_PUBLIC_FACEBOOK_APP_ID === FACEBOOK_APP_ID)),
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
-    // TASK 6: SAFE TOKEN EXCHANGE AUDIT LOG
+    // TASK 6 & 12: SAFE TOKEN EXCHANGE AUDIT LOG
     console.log('[META_TOKEN_EXCHANGE_AUDIT]', {
       appId: FACEBOOK_APP_ID,
       hasCode: Boolean(code),
+      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
       redirectUriUsed: exchangeRedirectUri,
       graphApiVersion: META_API_VERSION,
-      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
     });
 
     // TASK 12: SAFE DEFINITIVE DEBUG POINT LOG
@@ -75,70 +82,46 @@ export const exchangeToken = async (req, res) => {
       exchangeRedirectUri: exchangeRedirectUri,
       redirectUrisEqual: Boolean(inputRedirectUri ? inputRedirectUri === exchangeRedirectUri : true),
       appIdsEqual: Boolean(FACEBOOK_APP_ID && process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? FACEBOOK_APP_ID === process.env.NEXT_PUBLIC_FACEBOOK_APP_ID : true),
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
     console.log('[META_OAUTH_FLOW]', {
       stage: 'EXCHANGE_REQUEST',
       redirectUri: exchangeRedirectUri,
       appId: FACEBOOK_APP_ID,
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
     let accessToken = customAccessToken || '';
     let tokenExpiry = null;
 
-    // Exchange Auth Code for User Access Token
+    // Exchange Auth Code for User Access Token (Single exact call, NO candidate loop)
     if (code && !accessToken) {
-      // Primary candidate is the exact redirect_uri associated with authorization dialog
-      const redirectCandidates = [
-        exchangeRedirectUri,
-        `${baseAppUrl}/`,
-        `${baseAppUrl}/api/meta/exchange-token`,
-        `${baseAppUrl}`,
-      ];
+      try {
+        const exchangeParams = {
+          client_id: FACEBOOK_APP_ID,
+          client_secret: FACEBOOK_APP_SECRET,
+          code: code,
+          redirect_uri: exchangeRedirectUri,
+        };
 
-      let lastError = null;
-      for (const candidateUri of redirectCandidates) {
-        try {
-          const exchangeParams = {
-            client_id: FACEBOOK_APP_ID,
-            client_secret: FACEBOOK_APP_SECRET,
-            code: code,
-          };
-          if (candidateUri) {
-            exchangeParams.redirect_uri = candidateUri;
-          }
+        const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
+          params: exchangeParams,
+        });
 
-          const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
-            params: exchangeParams,
-          });
-
-          if (tokenRes.data?.access_token) {
-            accessToken = tokenRes.data.access_token;
-            console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS', matchedUri: candidateUri });
-            break;
-          }
-        } catch (err) {
-          lastError = err;
-          const metaErrMsg = err.response?.data?.error?.message || err.message;
-          console.warn(`[META_OAUTH_FLOW] Exchange notice for URI (${candidateUri}): ${metaErrMsg}`);
-          // If error is NOT a redirect_uri validation mismatch, break early
-          if (!metaErrMsg.includes('Error validating verification code') && !metaErrMsg.includes('redirect_uri')) {
-            break;
-          }
+        if (tokenRes.data?.access_token) {
+          accessToken = tokenRes.data.access_token;
+          console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS' });
         }
-      }
-
-      if (!accessToken && lastError) {
-        const metaErrObj = lastError.response?.data?.error || {};
+      } catch (err) {
+        const metaErrObj = err.response?.data?.error || {};
         console.error('[META_OAUTH_FLOW]', {
           stage: 'EXCHANGE_FAILED',
           errorCode: metaErrObj.code || 400,
           errorSubcode: metaErrObj.error_subcode || null,
-          errorMessage: metaErrObj.message || lastError.message,
+          errorMessage: metaErrObj.message || err.message,
         });
-        const metaError = metaErrObj.message || lastError.message;
+        const metaError = metaErrObj.message || err.message;
         return errorResponse(res, `Meta OAuth authorization failed: ${metaError}`, 400);
       }
     }

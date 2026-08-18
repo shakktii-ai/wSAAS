@@ -146,16 +146,24 @@ export default function WhatsAppHub() {
 
     const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
+    let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || '';
+
     try {
       const startRes = await api.get('/meta/embedded-signup/start');
-      if (startRes.success && startRes.data?.appId) {
-        appId = startRes.data.appId;
+      if (startRes.success && startRes.data) {
+        if (startRes.data.appId) appId = startRes.data.appId;
+        if (startRes.data.configId) configId = startRes.data.configId;
       }
     } catch (e) {
       console.warn('[Meta Embedded Signup] Start endpoint warning:', e.message);
     }
 
-    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || process.env.META_EMBEDDED_SIGNUP_CONFIG_ID;
+    console.log('[META_CONFIG_TRACE]', {
+      source: configId ? 'API_OR_ENV' : 'MISSING',
+      configIdPresent: Boolean(configId),
+      configIdLength: configId ? configId.length : 0,
+      appId: appId || '2805534946480538',
+    });
 
     console.log('[META_OAUTH_FLOW]', {
       stage: 'LOGIN_STARTED',
