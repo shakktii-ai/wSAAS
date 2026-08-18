@@ -40,6 +40,16 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken } = req.body;
 
+    // SAFE Diagnostic Logging (no secrets, tokens, or authorization codes logged)
+    console.log('[Meta Embedded Controller] exchangeToken request received:', {
+      requestSent: true,
+      hasCode: Boolean(code),
+      hasAccessToken: Boolean(customAccessToken),
+      hasWabaId: Boolean(inputWabaId),
+      hasPhoneNumberId: Boolean(inputPhoneId),
+      companyId: String(companyId),
+    });
+
     let accessToken = customAccessToken || '';
     let tokenExpiry = null;
 

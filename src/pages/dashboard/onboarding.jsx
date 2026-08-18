@@ -38,42 +38,171 @@ export default function SaaSOnboardingWizard() {
     }
   };
 
+  const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
+
   useEffect(() => {
     fetchOnboardingData();
+
+    // Load Meta Facebook SDK dynamically
+    if (typeof window !== 'undefined' && !window.FB) {
+      window.fbAsyncInit = function () {
+        window.FB.init({
+          appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
+          cookie: true,
+          xfbml: true,
+          version: 'v20.0',
+        });
+      };
+      (function (d, s, id) {
+        var js,
+          fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s);
+        js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        fjs.parentNode.insertBefore(js, fjs);
+      })(document, 'script', 'facebook-jssdk');
+    }
+
+    // Listen to Meta Embedded Signup session events from popup window
+    const handleMetaMessage = (event) => {
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.event === 'FINISH') {
+            const { waba_id, phone_number_id } = data.data || {};
+            embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
+            console.log('[Meta Onboarding] FINISH event received:', {
+              hasWabaId: Boolean(waba_id),
+              hasPhoneNumberId: Boolean(phone_number_id),
+            });
+          } else if (data.event === 'CANCEL') {
+            console.log('[Meta Onboarding] CANCEL event received');
+            setConnecting(false);
+          }
+        }
+      } catch (e) {
+        // Non-JSON message ignore
+      }
+    };
+
+    window.addEventListener('message', handleMetaMessage);
+    return () => window.removeEventListener('message', handleMetaMessage);
   }, []);
+
+  const completeExchange = async (payload) => {
+    try {
+      setConnecting(true);
+      console.log('[Meta Onboarding] Initiating POST /api/meta/exchange-token', {
+        requestSent: true,
+        hasCode: Boolean(payload.code),
+        hasAccessToken: Boolean(payload.accessToken),
+        hasWabaId: Boolean(payload.wabaId),
+        hasPhoneNumberId: Boolean(payload.phoneNumberId),
+      });
+
+      const res = await api.post('/meta/exchange-token', payload);
+      if (res.success) {
+        fetchOnboardingData();
+      } else {
+        setErrorMessage(res.message || 'Meta OAuth authorization exchange failed.');
+      }
+    } catch (err) {
+      setErrorMessage(err.message || 'WhatsApp connection was not completed. Please try connecting again.');
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const handleLaunchMetaSignup = async () => {
     setConnecting(true);
     setErrorMessage('');
-    try {
-      const res = await api.post('/meta/embedded-signup/start');
-      if (res.success && res.data) {
-        const appId = res.data.appId || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
-        const redirectUri = window.location.origin + '/api/meta/exchange-token';
-        
-        const popup = window.open(
-          `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
-            redirectUri
-          )}&scope=whatsapp_business_management,whatsapp_business_messaging`,
-          '_blank',
-          'width=600,height=700'
-        );
+    embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
 
-        // Poll popup or window closure to refresh connection status
-        const popupTimer = setInterval(() => {
-          if (!popup || popup.closed) {
-            clearInterval(popupTimer);
-            setConnecting(false);
-            fetchOnboardingData();
-          }
-        }, 1500);
-      } else {
-        setErrorMessage('WhatsApp connection was not completed. Please try connecting again.');
-        setConnecting(false);
+    let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
+    try {
+      const startRes = await api.post('/meta/embedded-signup/start');
+      if (startRes.success && startRes.data?.appId) {
+        appId = startRes.data.appId;
       }
-    } catch (err) {
-      setErrorMessage(err.message || 'WhatsApp connection was not completed. Please try connecting again.');
-      setConnecting(false);
+    } catch (e) {
+      console.warn('[Meta Onboarding] Start endpoint notice:', e.message);
+    }
+
+    const initAndLogin = () => {
+      if (appId && window.FB) {
+        try {
+          window.FB.init({
+            appId,
+            cookie: true,
+            xfbml: true,
+            version: 'v20.0',
+          });
+        } catch (e) {}
+      }
+
+      window.FB.login(
+        async (response) => {
+          console.log('[Meta Onboarding] FB.login response:', {
+            hasAuthResponse: Boolean(response?.authResponse),
+            hasCode: Boolean(response?.authResponse?.code),
+            hasAccessToken: Boolean(response?.authResponse?.accessToken),
+            authStatus: response?.status,
+            responseKeys: Object.keys(response || {}),
+            userIDPresent: Boolean(response?.authResponse?.userID),
+          });
+
+          const code = response?.authResponse?.code;
+          const accessToken = response?.authResponse?.accessToken;
+
+          if (code || accessToken) {
+            await completeExchange({
+              code,
+              accessToken,
+              wabaId: embeddedSessionRef.current?.wabaId || undefined,
+              phoneNumberId: embeddedSessionRef.current?.phoneNumberId || undefined,
+            });
+          } else {
+            setConnecting(false);
+            if (response?.status !== 'unknown') {
+              setErrorMessage('Meta authorization code was not returned. Please ensure popup is permitted and complete Embedded Signup.');
+            }
+          }
+        },
+        {
+          scope: 'whatsapp_business_management,whatsapp_business_messaging',
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: '',
+            sessionInfoVersion: '2',
+          },
+        }
+      );
+    };
+
+    if (typeof window !== 'undefined' && window.FB) {
+      initAndLogin();
+    } else {
+      (function (d, s, id) {
+        var js,
+          fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s);
+        js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        js.onload = () => {
+          if (window.FB) initAndLogin();
+          else setErrorMessage('Meta Facebook SDK could not be initialized.');
+        };
+        js.onerror = () => {
+          setErrorMessage('Failed to load Facebook SDK. Please check your network connection.');
+          setConnecting(false);
+        };
+        fjs.parentNode.insertBefore(js, fjs);
+      })(document, 'script', 'facebook-jssdk');
     }
   };
 

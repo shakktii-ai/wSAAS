@@ -34,6 +34,8 @@ export default function WhatsAppHub() {
   const [manualPhoneId, setManualPhoneId] = useState('');
   const [manualWabaId, setManualWabaId] = useState('');
 
+  const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
+
   const fetchAccount = async () => {
     try {
       setLoading(true);
@@ -73,16 +75,20 @@ export default function WhatsAppHub() {
     }
 
     // Listen to Meta Embedded Signup session events from popup window
-    const handleMetaMessage = async (event) => {
+    const handleMetaMessage = (event) => {
       if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
       try {
-        const data = JSON.parse(event.data);
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data.type === 'WA_EMBEDDED_SIGNUP') {
           if (data.event === 'FINISH') {
-            const { waba_id, phone_number_id } = data.data;
-            await completeExchange({ wabaId: waba_id, phoneNumberId: phone_number_id });
+            const { waba_id, phone_number_id } = data.data || {};
+            embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
+            console.log('[Meta Embedded Signup] FINISH event received:', {
+              hasWabaId: Boolean(waba_id),
+              hasPhoneNumberId: Boolean(phone_number_id),
+            });
           } else if (data.event === 'CANCEL') {
-            alert('Meta Embedded Signup was cancelled by user.');
+            console.log('[Meta Embedded Signup] CANCEL event received');
             setConnecting(false);
           }
         }
@@ -98,6 +104,14 @@ export default function WhatsAppHub() {
   const completeExchange = async (payload) => {
     try {
       setConnecting(true);
+      console.log('[Meta Exchange Token] Initiating POST /api/meta/exchange-token', {
+        requestSent: true,
+        hasCode: Boolean(payload.code),
+        hasAccessToken: Boolean(payload.accessToken),
+        hasWabaId: Boolean(payload.wabaId),
+        hasPhoneNumberId: Boolean(payload.phoneNumberId),
+      });
+
       const res = await api.post('/meta/exchange-token', payload);
       if (res.success) {
         alert('WhatsApp Business Account connected successfully!');
@@ -113,23 +127,64 @@ export default function WhatsAppHub() {
   };
 
   // Launch Meta Embedded Signup Popup
-  const launchEmbeddedSignup = () => {
+  const launchEmbeddedSignup = async () => {
     setConnecting(true);
+    embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
 
-    if (typeof window !== 'undefined' && window.FB) {
+    let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
+    try {
+      const startRes = await api.get('/meta/embedded-signup/start');
+      if (startRes.success && startRes.data?.appId) {
+        appId = startRes.data.appId;
+      }
+    } catch (e) {
+      console.warn('[Meta Embedded Signup] Start endpoint warning:', e.message);
+    }
+
+    const initAndLogin = () => {
+      if (appId && window.FB) {
+        try {
+          window.FB.init({
+            appId,
+            cookie: true,
+            xfbml: true,
+            version: 'v20.0',
+          });
+        } catch (e) {}
+      }
+
       window.FB.login(
-        (response) => {
-          if (response.authResponse) {
-            const code = response.authResponse.code;
-            completeExchange({ code });
+        async (response) => {
+          console.log('[Meta Embedded Signup] FB.login response:', {
+            hasAuthResponse: Boolean(response?.authResponse),
+            hasCode: Boolean(response?.authResponse?.code),
+            hasAccessToken: Boolean(response?.authResponse?.accessToken),
+            authStatus: response?.status,
+            responseKeys: Object.keys(response || {}),
+            userIDPresent: Boolean(response?.authResponse?.userID),
+          });
+
+          const code = response?.authResponse?.code;
+          const accessToken = response?.authResponse?.accessToken;
+
+          if (code || accessToken) {
+            await completeExchange({
+              code,
+              accessToken,
+              wabaId: embeddedSessionRef.current?.wabaId || undefined,
+              phoneNumberId: embeddedSessionRef.current?.phoneNumberId || undefined,
+            });
           } else {
-            // Fallback to manual setup
             setConnecting(false);
-            setShowManualModal(true);
+            if (response?.status !== 'unknown') {
+              alert('Meta authorization code was not returned. Please ensure popup is permitted and complete Embedded Signup.');
+            }
           }
         },
         {
           scope: 'whatsapp_business_management,whatsapp_business_messaging',
+          response_type: 'code',
+          override_default_response_type: true,
           extras: {
             setup: {},
             featureType: '',
@@ -137,10 +192,29 @@ export default function WhatsAppHub() {
           },
         }
       );
+    };
+
+    if (typeof window !== 'undefined' && window.FB) {
+      initAndLogin();
     } else {
-      // Fallback
-      setShowManualModal(true);
-      setConnecting(false);
+      // Dynamically load Facebook SDK if not ready
+      (function (d, s, id) {
+        var js,
+          fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s);
+        js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        js.onload = () => {
+          if (window.FB) initAndLogin();
+          else setShowManualModal(true);
+        };
+        js.onerror = () => {
+          setShowManualModal(true);
+          setConnecting(false);
+        };
+        fjs.parentNode.insertBefore(js, fjs);
+      })(document, 'script', 'facebook-jssdk');
     }
   };
 
