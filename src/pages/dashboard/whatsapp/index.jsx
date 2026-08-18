@@ -154,7 +154,7 @@ export default function WhatsAppHub() {
       }
 
       window.FB.login(
-        async (response) => {
+        (response) => {
           console.log('[Meta Embedded Signup] FB.login response:', {
             hasAuthResponse: Boolean(response?.authResponse),
             hasCode: Boolean(response?.authResponse?.code),
@@ -168,7 +168,7 @@ export default function WhatsAppHub() {
           const accessToken = response?.authResponse?.accessToken;
 
           if (code || accessToken) {
-            await completeExchange({
+            completeExchange({
               code,
               accessToken,
               wabaId: embeddedSessionRef.current?.wabaId || undefined,

@@ -143,7 +143,7 @@ export default function SaaSOnboardingWizard() {
       }
 
       window.FB.login(
-        async (response) => {
+        (response) => {
           console.log('[Meta Onboarding] FB.login response:', {
             hasAuthResponse: Boolean(response?.authResponse),
             hasCode: Boolean(response?.authResponse?.code),
@@ -157,7 +157,7 @@ export default function SaaSOnboardingWizard() {
           const accessToken = response?.authResponse?.accessToken;
 
           if (code || accessToken) {
-            await completeExchange({
+            completeExchange({
               code,
               accessToken,
               wabaId: embeddedSessionRef.current?.wabaId || undefined,
