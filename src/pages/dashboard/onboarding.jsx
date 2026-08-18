@@ -39,12 +39,35 @@ export default function SaaSOnboardingWizard() {
   };
 
   const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
+  const oauthCodeRef = React.useRef(null);
   const isExchangingRef = React.useRef(false);
 
   const getRedirectUri = () => {
     if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
     const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
     return `${origin.replace(/\/$/, '')}/`;
+  };
+
+  const tryCompleteMetaExchange = () => {
+    const code = oauthCodeRef.current;
+    const { wabaId, phoneNumberId } = embeddedSessionRef.current;
+
+    console.log('[META_EXCHANGE_GATE]', {
+      hasCode: Boolean(code),
+      hasWabaId: Boolean(wabaId),
+      hasPhoneNumberId: Boolean(phoneNumberId),
+      exchangeStarted: isExchangingRef.current,
+    });
+
+    if (code && wabaId && phoneNumberId && !isExchangingRef.current) {
+      isExchangingRef.current = true;
+      completeExchange({
+        code,
+        wabaId,
+        phoneNumberId,
+        redirectUri: getRedirectUri(),
+      });
+    }
   };
 
   useEffect(() => {
@@ -80,11 +103,12 @@ export default function SaaSOnboardingWizard() {
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
             embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
-            console.log('[META_OAUTH_FLOW]', {
-              stage: 'EMBEDDED_SIGNUP_FINISH',
+            console.log('[META_EMBEDDED_SIGNUP_FINISH]', {
+              event: 'FINISH',
               hasWabaId: Boolean(waba_id),
               hasPhoneNumberId: Boolean(phone_number_id),
             });
+            tryCompleteMetaExchange();
           } else if (data.event === 'CANCEL') {
             console.log('[META_OAUTH_FLOW] Embedded Signup session CANCELLED');
             setConnecting(false);
@@ -131,6 +155,7 @@ export default function SaaSOnboardingWizard() {
     setConnecting(true);
     setErrorMessage('');
     isExchangingRef.current = false;
+    oauthCodeRef.current = null;
     embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
 
     const redirectUri = getRedirectUri();
@@ -139,9 +164,18 @@ export default function SaaSOnboardingWizard() {
 
     try {
       const startRes = await api.post('/meta/embedded-signup/start');
+      console.log('[META_CONFIG_API_RESPONSE]', {
+        success: Boolean(startRes?.success),
+        configIdPresent: Boolean(startRes?.data?.configId || startRes?.data?.config_id),
+        configIdLength: (startRes?.data?.configId || startRes?.data?.config_id) ? (startRes.data.configId || startRes.data.config_id).length : 0,
+        responseKeys: Object.keys(startRes?.data || {}),
+      });
+
       if (startRes.success && startRes.data) {
         if (startRes.data.appId) appId = startRes.data.appId;
-        if (startRes.data.configId) configId = startRes.data.configId;
+        if (startRes.data.configId || startRes.data.config_id) {
+          configId = startRes.data.configId || startRes.data.config_id;
+        }
       }
     } catch (e) {
       console.warn('[Meta Onboarding] Start endpoint notice:', e.message);
@@ -203,15 +237,9 @@ export default function SaaSOnboardingWizard() {
             authStatus: response?.status,
           });
 
-          if ((code || accessToken) && !isExchangingRef.current) {
-            isExchangingRef.current = true;
-            completeExchange({
-              code,
-              accessToken,
-              redirectUri,
-              wabaId: embeddedSessionRef.current?.wabaId || undefined,
-              phoneNumberId: embeddedSessionRef.current?.phoneNumberId || undefined,
-            });
+          if (code) {
+            oauthCodeRef.current = code;
+            tryCompleteMetaExchange();
           } else if (!code && !accessToken) {
             setConnecting(false);
             if (response?.status !== 'unknown') {
