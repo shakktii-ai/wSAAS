@@ -18,7 +18,7 @@ export const startEmbeddedSignup = async (req, res) => {
       process.env.META_EMBEDDED_SIGNUP_CONFIG_ID ||
       process.env.META_CONFIG_ID ||
       process.env.NEXT_PUBLIC_META_CONFIG_ID ||
-      '';
+      '2154509951776876';
 
     // TASK 4: Safe Backend Server Logging
     console.log('[META_CONFIG_SERVER_TRACE]', {
@@ -35,20 +35,21 @@ export const startEmbeddedSignup = async (req, res) => {
       success: true,
       data: {
         appId: FACEBOOK_APP_ID,
-        configId: configId || undefined,
-        config_id: configId || undefined,
+        configId: configId,
+        config_id: configId,
         apiVersion: META_API_VERSION,
         scope: 'whatsapp_business_management,whatsapp_business_messaging',
         responseType: 'code',
         extras: {
           setup: {},
-          featureType: '',
+          featureType: 'whatsapp_business_app_onboarding',
           sessionInfoVersion: '3',
+          version: 'v4',
         },
       },
       appId: FACEBOOK_APP_ID,
-      configId: configId || undefined,
-      config_id: configId || undefined,
+      configId: configId,
+      config_id: configId,
     });
   } catch (error) {
     return errorResponse(res, 'Failed to start Meta Embedded Signup', 500);
@@ -68,6 +69,14 @@ export const exchangeToken = async (req, res) => {
     // Standardized base URL & redirect URI resolution
     const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
     const exchangeRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || `${baseAppUrl}/`;
+
+    // TASK 7: SAFE EXACT TOKEN EXCHANGE METADATA LOG
+    console.log('[META_TOKEN_EXCHANGE_EXACT]', {
+      redirectUri: exchangeRedirectUri,
+      redirectUriLength: exchangeRedirectUri ? exchangeRedirectUri.length : 0,
+      hasCode: Boolean(code),
+      clientId: FACEBOOK_APP_ID,
+    });
 
     // TASK 4: SAFE CONFIG AUDIT LOG
     console.log('[META_CONFIG_AUDIT]', {

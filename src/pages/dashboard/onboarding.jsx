@@ -305,11 +305,22 @@ export default function SaaSOnboardingWizard() {
 
       const apiExtras = startResData?.extras || {};
       const sessionInfoVersion = apiExtras.sessionInfoVersion || '3';
+      const featureType = apiExtras.featureType || 'whatsapp_business_app_onboarding';
+      const version = apiExtras.version || 'v4';
 
       console.log('[META_SESSION_VERSION]', {
         sessionInfoVersion,
+        featureType,
+        version,
         configIdPresent: Boolean(configId),
         responseType: 'code',
+      });
+
+      // TASK 8: Log exact redirect URI used when starting FB.login
+      console.log('[META_OAUTH_REDIRECT_EXACT]', {
+        redirectUri: redirectUri,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
 
       const loginOptions = {
@@ -318,8 +329,9 @@ export default function SaaSOnboardingWizard() {
         override_default_response_type: true,
         extras: {
           setup: apiExtras.setup || {},
-          featureType: apiExtras.featureType || '',
+          featureType: featureType,
           sessionInfoVersion: sessionInfoVersion,
+          version: version,
         },
       };
       if (configId) {
