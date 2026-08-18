@@ -44,7 +44,7 @@ export default function SaaSOnboardingWizard() {
   const getRedirectUri = () => {
     if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
     const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
-    return `${origin.replace(/\/$/, '')}/api/meta/exchange-token`;
+    return `${origin.replace(/\/$/, '')}/`;
   };
 
   useEffect(() => {

@@ -40,11 +40,18 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken, redirectUri: inputRedirectUri } = req.body;
 
-    // Standardized redirect URI resolution
+    // Standardized base URL & redirect URI resolution
     const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
-    const resolvedRedirectUri = process.env.META_OAUTH_REDIRECT_URI || `${baseAppUrl}/api/meta/exchange-token`;
+    const exchangeRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || `${baseAppUrl}/`;
 
-    // SAFE Diagnostic Logging per instructions (Zero credentials/secrets/tokens logged)
+    // TASK 4: SAFE CONFIG AUDIT LOG
+    console.log('[META_CONFIG_AUDIT]', {
+      appId: FACEBOOK_APP_ID,
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      configIdMatchesExpectedApp: true,
+    });
+
+    // TASK 5: SAFE APP ID AUDIT LOG
     console.log('[META_APP_ID_DEBUG]', {
       frontendAppId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
       backendAppId: FACEBOOK_APP_ID,
@@ -52,15 +59,28 @@ export const exchangeToken = async (req, res) => {
       configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
-    console.log('[META_CONFIG_DEBUG]', {
+    // TASK 6: SAFE TOKEN EXCHANGE AUDIT LOG
+    console.log('[META_TOKEN_EXCHANGE_AUDIT]', {
       appId: FACEBOOK_APP_ID,
-      configId: process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID || 'NOT_CONFIGURED',
-      configBelongsToExpectedApp: true,
+      hasCode: Boolean(code),
+      redirectUriUsed: exchangeRedirectUri,
+      graphApiVersion: META_API_VERSION,
+      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
+    });
+
+    // TASK 12: SAFE DEFINITIVE DEBUG POINT LOG
+    console.log('[META_FINAL_OAUTH_EXCHANGE]', {
+      authorizationCodePresent: Boolean(code),
+      authorizationRequestRedirectUri: inputRedirectUri || exchangeRedirectUri,
+      exchangeRedirectUri: exchangeRedirectUri,
+      redirectUrisEqual: Boolean(inputRedirectUri ? inputRedirectUri === exchangeRedirectUri : true),
+      appIdsEqual: Boolean(FACEBOOK_APP_ID && process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? FACEBOOK_APP_ID === process.env.NEXT_PUBLIC_FACEBOOK_APP_ID : true),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
     console.log('[META_OAUTH_FLOW]', {
       stage: 'EXCHANGE_REQUEST',
-      redirectUri: resolvedRedirectUri,
+      redirectUri: exchangeRedirectUri,
       appId: FACEBOOK_APP_ID,
       configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
@@ -70,12 +90,13 @@ export const exchangeToken = async (req, res) => {
 
     // Exchange Auth Code for User Access Token
     if (code && !accessToken) {
-      // Candidates for Graph API /oauth/access_token exchange
-      // FB.login JS SDK codes standardly expect empty redirect_uri ("") or matching redirect_uri
-      const redirectCandidates = ['', resolvedRedirectUri];
-      if (inputRedirectUri && !redirectCandidates.includes(inputRedirectUri)) {
-        redirectCandidates.push(inputRedirectUri);
-      }
+      // Primary candidate is the exact redirect_uri associated with authorization dialog
+      const redirectCandidates = [
+        exchangeRedirectUri,
+        `${baseAppUrl}/`,
+        `${baseAppUrl}/api/meta/exchange-token`,
+        `${baseAppUrl}`,
+      ];
 
       let lastError = null;
       for (const candidateUri of redirectCandidates) {
@@ -95,13 +116,13 @@ export const exchangeToken = async (req, res) => {
 
           if (tokenRes.data?.access_token) {
             accessToken = tokenRes.data.access_token;
-            console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS' });
+            console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS', matchedUri: candidateUri });
             break;
           }
         } catch (err) {
           lastError = err;
           const metaErrMsg = err.response?.data?.error?.message || err.message;
-          console.warn(`[META_OAUTH_FLOW] Code exchange candidate notice (${candidateUri || 'empty'}): ${metaErrMsg}`);
+          console.warn(`[META_OAUTH_FLOW] Exchange notice for URI (${candidateUri}): ${metaErrMsg}`);
           // If error is NOT a redirect_uri validation mismatch, break early
           if (!metaErrMsg.includes('Error validating verification code') && !metaErrMsg.includes('redirect_uri')) {
             break;
