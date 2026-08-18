@@ -39,6 +39,13 @@ export default function SaaSOnboardingWizard() {
   };
 
   const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
+  const isExchangingRef = React.useRef(false);
+
+  const getRedirectUri = () => {
+    if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
+    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
+    return `${origin.replace(/\/$/, '')}/api/meta/exchange-token`;
+  };
 
   useEffect(() => {
     fetchOnboardingData();
@@ -73,12 +80,13 @@ export default function SaaSOnboardingWizard() {
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
             embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
-            console.log('[Meta Onboarding] FINISH event received:', {
+            console.log('[META_OAUTH_DEBUG]', {
               hasWabaId: Boolean(waba_id),
               hasPhoneNumberId: Boolean(phone_number_id),
+              sessionCaptured: true,
             });
           } else if (data.event === 'CANCEL') {
-            console.log('[Meta Onboarding] CANCEL event received');
+            console.log('[META_OAUTH_DEBUG] Session CANCELLED');
             setConnecting(false);
           }
         }
@@ -94,15 +102,17 @@ export default function SaaSOnboardingWizard() {
   const completeExchange = async (payload) => {
     try {
       setConnecting(true);
-      console.log('[Meta Onboarding] Initiating POST /api/meta/exchange-token', {
-        requestSent: true,
-        hasCode: Boolean(payload.code),
-        hasAccessToken: Boolean(payload.accessToken),
-        hasWabaId: Boolean(payload.wabaId),
-        hasPhoneNumberId: Boolean(payload.phoneNumberId),
+      const redirectUri = payload.redirectUri || getRedirectUri();
+      const finalPayload = { ...payload, redirectUri };
+
+      console.log('[META_OAUTH_DEBUG]', {
+        hasCode: Boolean(finalPayload.code),
+        hasWabaId: Boolean(finalPayload.wabaId),
+        hasPhoneNumberId: Boolean(finalPayload.phoneNumberId),
+        exchangeStarted: true,
       });
 
-      const res = await api.post('/meta/exchange-token', payload);
+      const res = await api.post('/meta/exchange-token', finalPayload);
       if (res.success) {
         fetchOnboardingData();
       } else {
@@ -112,14 +122,18 @@ export default function SaaSOnboardingWizard() {
       setErrorMessage(err.message || 'WhatsApp connection was not completed. Please try connecting again.');
     } finally {
       setConnecting(false);
+      isExchangingRef.current = false;
     }
   };
 
   const handleLaunchMetaSignup = async () => {
+    if (connecting || isExchangingRef.current) return;
     setConnecting(true);
     setErrorMessage('');
+    isExchangingRef.current = false;
     embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
 
+    const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
     try {
       const startRes = await api.post('/meta/embedded-signup/start');
@@ -144,26 +158,26 @@ export default function SaaSOnboardingWizard() {
 
       window.FB.login(
         (response) => {
-          console.log('[Meta Onboarding] FB.login response:', {
-            hasAuthResponse: Boolean(response?.authResponse),
+          console.log('[META_OAUTH_DEBUG]', {
             hasCode: Boolean(response?.authResponse?.code),
             hasAccessToken: Boolean(response?.authResponse?.accessToken),
             authStatus: response?.status,
-            responseKeys: Object.keys(response || {}),
-            userIDPresent: Boolean(response?.authResponse?.userID),
+            exchangeStarted: false,
           });
 
           const code = response?.authResponse?.code;
           const accessToken = response?.authResponse?.accessToken;
 
-          if (code || accessToken) {
+          if ((code || accessToken) && !isExchangingRef.current) {
+            isExchangingRef.current = true;
             completeExchange({
               code,
               accessToken,
+              redirectUri,
               wabaId: embeddedSessionRef.current?.wabaId || undefined,
               phoneNumberId: embeddedSessionRef.current?.phoneNumberId || undefined,
             });
-          } else {
+          } else if (!code && !accessToken) {
             setConnecting(false);
             if (response?.status !== 'unknown') {
               setErrorMessage('Meta authorization code was not returned. Please ensure popup is permitted and complete Embedded Signup.');
@@ -174,6 +188,7 @@ export default function SaaSOnboardingWizard() {
           scope: 'whatsapp_business_management,whatsapp_business_messaging',
           response_type: 'code',
           override_default_response_type: true,
+          redirect_uri: redirectUri,
           extras: {
             setup: {},
             featureType: '',

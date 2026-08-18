@@ -38,15 +38,26 @@ export const exchangeToken = async (req, res) => {
   try {
     await connectDB();
     const companyId = req.company._id;
-    const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken } = req.body;
+    const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken, redirectUri: inputRedirectUri } = req.body;
+
+    // Resolve unified redirect URI (must match byte-for-byte with FB.login)
+    let resolvedRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || '';
+    if (!resolvedRedirectUri && req.headers?.host) {
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      resolvedRedirectUri = `${proto}://${req.headers.host}/api/meta/exchange-token`;
+    }
+    if (!resolvedRedirectUri) {
+      const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
+      resolvedRedirectUri = `${baseAppUrl}/api/meta/exchange-token`;
+    }
 
     // SAFE Diagnostic Logging (no secrets, tokens, or authorization codes logged)
-    console.log('[Meta Embedded Controller] exchangeToken request received:', {
-      requestSent: true,
+    console.log('[META_OAUTH_EXCHANGE_DEBUG]', {
       hasCode: Boolean(code),
       hasAccessToken: Boolean(customAccessToken),
       hasWabaId: Boolean(inputWabaId),
       hasPhoneNumberId: Boolean(inputPhoneId),
+      redirectUriConfigured: Boolean(resolvedRedirectUri),
       companyId: String(companyId),
     });
 
@@ -56,17 +67,26 @@ export const exchangeToken = async (req, res) => {
     // Exchange Auth Code for User Access Token
     if (code && !accessToken) {
       try {
+        const exchangeParams = {
+          client_id: FACEBOOK_APP_ID,
+          client_secret: FACEBOOK_APP_SECRET,
+          code: code,
+        };
+        if (resolvedRedirectUri) {
+          exchangeParams.redirect_uri = resolvedRedirectUri;
+        }
+
         const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
-          params: {
-            client_id: FACEBOOK_APP_ID,
-            client_secret: FACEBOOK_APP_SECRET,
-            code: code,
-          },
+          params: exchangeParams,
         });
         accessToken = tokenRes.data.access_token;
       } catch (err) {
         console.error('Code exchange failed:', err.response?.data || err.message);
-        return errorResponse(res, `Meta OAuth authorization failed: ${err.response?.data?.error?.message || err.message}`, 400);
+        const metaError = err.response?.data?.error?.message || err.message;
+        const userMsg = metaError.includes('Error validating verification code')
+          ? 'Meta authorization could not be completed. Please restart Connect WhatsApp and try again.'
+          : `Meta OAuth authorization failed: ${metaError}`;
+        return errorResponse(res, userMsg, 400);
       }
     }
 

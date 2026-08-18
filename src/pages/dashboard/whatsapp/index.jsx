@@ -35,6 +35,13 @@ export default function WhatsAppHub() {
   const [manualWabaId, setManualWabaId] = useState('');
 
   const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
+  const isExchangingRef = React.useRef(false);
+
+  const getRedirectUri = () => {
+    if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
+    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
+    return `${origin.replace(/\/$/, '')}/api/meta/exchange-token`;
+  };
 
   const fetchAccount = async () => {
     try {
@@ -83,12 +90,13 @@ export default function WhatsAppHub() {
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
             embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
-            console.log('[Meta Embedded Signup] FINISH event received:', {
+            console.log('[META_OAUTH_DEBUG]', {
               hasWabaId: Boolean(waba_id),
               hasPhoneNumberId: Boolean(phone_number_id),
+              sessionCaptured: true,
             });
           } else if (data.event === 'CANCEL') {
-            console.log('[Meta Embedded Signup] CANCEL event received');
+            console.log('[META_OAUTH_DEBUG] Session CANCELLED');
             setConnecting(false);
           }
         }
@@ -104,15 +112,17 @@ export default function WhatsAppHub() {
   const completeExchange = async (payload) => {
     try {
       setConnecting(true);
-      console.log('[Meta Exchange Token] Initiating POST /api/meta/exchange-token', {
-        requestSent: true,
-        hasCode: Boolean(payload.code),
-        hasAccessToken: Boolean(payload.accessToken),
-        hasWabaId: Boolean(payload.wabaId),
-        hasPhoneNumberId: Boolean(payload.phoneNumberId),
+      const redirectUri = payload.redirectUri || getRedirectUri();
+      const finalPayload = { ...payload, redirectUri };
+
+      console.log('[META_OAUTH_DEBUG]', {
+        hasCode: Boolean(finalPayload.code),
+        hasWabaId: Boolean(finalPayload.wabaId),
+        hasPhoneNumberId: Boolean(finalPayload.phoneNumberId),
+        exchangeStarted: true,
       });
 
-      const res = await api.post('/meta/exchange-token', payload);
+      const res = await api.post('/meta/exchange-token', finalPayload);
       if (res.success) {
         alert('WhatsApp Business Account connected successfully!');
         fetchAccount();
@@ -123,14 +133,18 @@ export default function WhatsAppHub() {
       alert(err.message || 'Failed to connect WhatsApp account');
     } finally {
       setConnecting(false);
+      isExchangingRef.current = false;
     }
   };
 
   // Launch Meta Embedded Signup Popup
   const launchEmbeddedSignup = async () => {
+    if (connecting || isExchangingRef.current) return;
     setConnecting(true);
+    isExchangingRef.current = false;
     embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
 
+    const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
     try {
       const startRes = await api.get('/meta/embedded-signup/start');
@@ -155,26 +169,26 @@ export default function WhatsAppHub() {
 
       window.FB.login(
         (response) => {
-          console.log('[Meta Embedded Signup] FB.login response:', {
-            hasAuthResponse: Boolean(response?.authResponse),
+          console.log('[META_OAUTH_DEBUG]', {
             hasCode: Boolean(response?.authResponse?.code),
             hasAccessToken: Boolean(response?.authResponse?.accessToken),
             authStatus: response?.status,
-            responseKeys: Object.keys(response || {}),
-            userIDPresent: Boolean(response?.authResponse?.userID),
+            exchangeStarted: false,
           });
 
           const code = response?.authResponse?.code;
           const accessToken = response?.authResponse?.accessToken;
 
-          if (code || accessToken) {
+          if ((code || accessToken) && !isExchangingRef.current) {
+            isExchangingRef.current = true;
             completeExchange({
               code,
               accessToken,
+              redirectUri,
               wabaId: embeddedSessionRef.current?.wabaId || undefined,
               phoneNumberId: embeddedSessionRef.current?.phoneNumberId || undefined,
             });
-          } else {
+          } else if (!code && !accessToken) {
             setConnecting(false);
             if (response?.status !== 'unknown') {
               alert('Meta authorization code was not returned. Please ensure popup is permitted and complete Embedded Signup.');
@@ -185,6 +199,7 @@ export default function WhatsAppHub() {
           scope: 'whatsapp_business_management,whatsapp_business_messaging',
           response_type: 'code',
           override_default_response_type: true,
+          redirect_uri: redirectUri,
           extras: {
             setup: {},
             featureType: '',
