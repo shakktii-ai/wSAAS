@@ -70,12 +70,21 @@ export const exchangeToken = async (req, res) => {
     const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
     const exchangeRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || `${baseAppUrl}/`;
 
-    // TASK 7: SAFE EXACT TOKEN EXCHANGE METADATA LOG
+    // TASK 7 & 8: SAFE EXACT TOKEN EXCHANGE METADATA LOGS
     console.log('[META_TOKEN_EXCHANGE_EXACT]', {
       redirectUri: exchangeRedirectUri,
       redirectUriLength: exchangeRedirectUri ? exchangeRedirectUri.length : 0,
       hasCode: Boolean(code),
       clientId: FACEBOOK_APP_ID,
+    });
+
+    console.log('[META_TOKEN_EXCHANGE_REQUEST]', {
+      clientId: FACEBOOK_APP_ID,
+      redirectUri: exchangeRedirectUri,
+      redirectUriLength: exchangeRedirectUri ? exchangeRedirectUri.length : 0,
+      hasCode: Boolean(code),
+      hasWabaId: Boolean(inputWabaId),
+      hasPhoneNumberId: Boolean(inputPhoneId),
     });
 
     // TASK 4: SAFE CONFIG AUDIT LOG
@@ -138,10 +147,23 @@ export const exchangeToken = async (req, res) => {
 
         if (tokenRes.data?.access_token) {
           accessToken = tokenRes.data.access_token;
+          console.log('[META_TOKEN_EXCHANGE_RESPONSE]', {
+            success: true,
+            statusCode: 200,
+            error: null,
+          });
           console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS' });
         }
       } catch (err) {
         const metaErrObj = err.response?.data?.error || {};
+        console.log('[META_TOKEN_EXCHANGE_RESPONSE]', {
+          success: false,
+          statusCode: err.response?.status || 400,
+          errorCode: metaErrObj.code || 400,
+          errorSubcode: metaErrObj.error_subcode || null,
+          errorType: metaErrObj.type || null,
+          errorMessage: metaErrObj.message || err.message,
+        });
         console.error('[META_OAUTH_FLOW]', {
           stage: 'EXCHANGE_FAILED',
           errorCode: metaErrObj.code || 400,

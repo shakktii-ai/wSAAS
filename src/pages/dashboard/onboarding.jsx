@@ -316,7 +316,19 @@ export default function SaaSOnboardingWizard() {
         responseType: 'code',
       });
 
-      // TASK 8: Log exact redirect URI used when starting FB.login
+      // TASK 8: Log safe metadata before FB.login authorization request
+      console.log('[META_OAUTH_AUTH_REQUEST]', {
+        appId: appId || '2805534946480538',
+        configId,
+        responseType: 'code',
+        overrideDefaultResponseType: true,
+        esVersion: version,
+        sessionInfoVersion,
+        featureType,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      });
+
       console.log('[META_OAUTH_REDIRECT_EXACT]', {
         redirectUri: redirectUri,
         origin: typeof window !== 'undefined' ? window.location.origin : '',
@@ -342,6 +354,12 @@ export default function SaaSOnboardingWizard() {
         (response) => {
           const code = response?.authResponse?.code;
           const accessToken = response?.authResponse?.accessToken;
+
+          console.log('[META_OAUTH_CALLBACK]', {
+            hasCode: Boolean(code),
+            hasAccessToken: Boolean(accessToken),
+            authStatus: response?.status,
+          });
 
           console.log('[META_OAUTH_FLOW]', {
             stage: 'FB_LOGIN_CALLBACK',
