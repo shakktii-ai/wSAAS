@@ -20,17 +20,35 @@ export const startEmbeddedSignup = async (req, res) => {
       process.env.NEXT_PUBLIC_META_CONFIG_ID ||
       '';
 
-    return successResponse(res, {
+    // TASK 4: Safe Backend Server Logging
+    console.log('[META_CONFIG_SERVER_TRACE]', {
+      stage: 'START_EMBEDDED_SIGNUP',
+      appIdPresent: Boolean(FACEBOOK_APP_ID),
+      primaryConfigEnvPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID),
+      secondaryConfigEnvPresent: Boolean(process.env.META_CONFIG_ID),
+      publicConfigEnvPresent: Boolean(process.env.NEXT_PUBLIC_META_CONFIG_ID),
+      resolvedConfigIdPresent: Boolean(configId),
+      resolvedConfigIdLength: configId ? configId.length : 0,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        appId: FACEBOOK_APP_ID,
+        configId: configId || undefined,
+        config_id: configId || undefined,
+        apiVersion: META_API_VERSION,
+        scope: 'whatsapp_business_management,whatsapp_business_messaging',
+        responseType: 'code',
+        extras: {
+          setup: {},
+          featureType: '',
+          sessionInfoVersion: '2',
+        },
+      },
       appId: FACEBOOK_APP_ID,
       configId: configId || undefined,
-      apiVersion: META_API_VERSION,
-      scope: 'whatsapp_business_management,whatsapp_business_messaging',
-      responseType: 'code',
-      extras: {
-        setup: {},
-        featureType: '',
-        sessionInfoVersion: '2',
-      },
+      config_id: configId || undefined,
     });
   } catch (error) {
     return errorResponse(res, 'Failed to start Meta Embedded Signup', 500);

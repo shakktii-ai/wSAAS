@@ -160,21 +160,38 @@ export default function SaaSOnboardingWizard() {
 
     const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
-    let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || '';
+    let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '';
 
     try {
       const startRes = await api.post('/meta/embedded-signup/start');
+
+      // TASK 5: Safe Frontend API Response Log
       console.log('[META_CONFIG_API_RESPONSE]', {
+        responseType: typeof startRes,
         success: Boolean(startRes?.success),
-        configIdPresent: Boolean(startRes?.data?.configId || startRes?.data?.config_id),
-        configIdLength: (startRes?.data?.configId || startRes?.data?.config_id) ? (startRes.data.configId || startRes.data.config_id).length : 0,
-        responseKeys: Object.keys(startRes?.data || {}),
+        hasData: Boolean(startRes?.data),
+        topLevelKeys: Object.keys(startRes || {}),
+        dataKeys: startRes?.data ? Object.keys(startRes.data) : [],
+        configIdTopLevelPresent: Boolean(startRes?.configId),
+        configIdNestedPresent: Boolean(startRes?.data?.configId),
+        configIdSnakeCaseTopLevelPresent: Boolean(startRes?.config_id),
+        configIdSnakeCaseNestedPresent: Boolean(startRes?.data?.config_id),
       });
 
-      if (startRes.success && startRes.data) {
-        if (startRes.data.appId) appId = startRes.data.appId;
-        if (startRes.data.configId || startRes.data.config_id) {
-          configId = startRes.data.configId || startRes.data.config_id;
+      // TASK 6: Universal Response Shape Extraction
+      if (startRes) {
+        if (startRes.appId) appId = startRes.appId;
+        if (startRes.data?.appId) appId = startRes.data.appId;
+
+        const responseConfigId =
+          startRes.configId ||
+          startRes.config_id ||
+          startRes.data?.configId ||
+          startRes.data?.config_id ||
+          '';
+
+        if (responseConfigId) {
+          configId = responseConfigId;
         }
       }
     } catch (e) {
@@ -187,6 +204,18 @@ export default function SaaSOnboardingWizard() {
       configIdLength: configId ? configId.length : 0,
       appId: appId || '2805534946480538',
     });
+
+    // TASK 8: Missing Config ID Guard
+    if (!configId) {
+      console.error('[META_CONFIG_MISSING]', {
+        appId: appId || '2805534946480538',
+        source: 'MISSING',
+        timestamp: new Date().toISOString(),
+      });
+      setConnecting(false);
+      setErrorMessage('Meta Embedded Signup configuration ID is missing. Please ensure META_EMBEDDED_SIGNUP_CONFIG_ID or META_CONFIG_ID is set in Vercel environment.');
+      return;
+    }
 
     console.log('[META_OAUTH_FLOW]', {
       stage: 'LOGIN_STARTED',
