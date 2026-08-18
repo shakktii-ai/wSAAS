@@ -40,94 +40,44 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken, redirectUri: inputRedirectUri } = req.body;
 
-    // Resolve unified redirect URI (must match byte-for-byte with FB.login)
-    let resolvedRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || '';
-    if (!resolvedRedirectUri && req.headers?.host) {
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      resolvedRedirectUri = `${proto}://${req.headers.host}/api/meta/exchange-token`;
-    }
-    if (!resolvedRedirectUri) {
-      const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
-      resolvedRedirectUri = `${baseAppUrl}/api/meta/exchange-token`;
-    }
+    // Standardized redirect URI resolution (exact matching URL without candidate mutation)
+    const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
+    const resolvedRedirectUri = process.env.META_OAUTH_REDIRECT_URI || `${baseAppUrl}/api/meta/exchange-token`;
 
-    // SAFE Diagnostic Logging (no secrets, tokens, or authorization codes logged)
+    // SAFE Diagnostic Logging per instructions (Zero credentials/secrets/tokens logged)
     console.log('[META_OAUTH_EXCHANGE_DEBUG]', {
+      appIdMatches: Boolean(FACEBOOK_APP_ID),
       hasCode: Boolean(code),
-      hasAccessToken: Boolean(customAccessToken),
-      hasWabaId: Boolean(inputWabaId),
-      hasPhoneNumberId: Boolean(inputPhoneId),
-      redirectUriConfigured: Boolean(resolvedRedirectUri),
-      companyId: String(companyId),
+      redirectUri: resolvedRedirectUri,
+      isProduction: process.env.NODE_ENV === 'production',
+      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
+      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
     });
 
     let accessToken = customAccessToken || '';
     let tokenExpiry = null;
 
-    // Exchange Auth Code for User Access Token with candidate redirect_uri matching
+    // Exchange Auth Code for User Access Token
     if (code && !accessToken) {
-      const candidates = [];
-      if (resolvedRedirectUri) candidates.push(resolvedRedirectUri);
-      if (inputRedirectUri && !candidates.includes(inputRedirectUri)) candidates.push(inputRedirectUri);
+      try {
+        const exchangeParams = {
+          client_id: FACEBOOK_APP_ID,
+          client_secret: FACEBOOK_APP_SECRET,
+          code: code,
+          redirect_uri: resolvedRedirectUri,
+        };
 
-      // Candidate 3: Base Origin (e.g. https://w-saas.vercel.app)
-      let baseOrigin = '';
-      if (req.headers?.host) {
-        const proto = req.headers['x-forwarded-proto'] || 'https';
-        baseOrigin = `${proto}://${req.headers.host}`;
-      } else if (process.env.NEXT_PUBLIC_APP_URL) {
-        baseOrigin = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
-      }
-      if (baseOrigin && !candidates.includes(baseOrigin)) candidates.push(baseOrigin);
+        const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
+          params: exchangeParams,
+        });
 
-      // Candidate 4: Referer URL (e.g. https://w-saas.vercel.app/dashboard/whatsapp)
-      if (req.headers?.referer) {
-        const cleanReferer = req.headers.referer.split('?')[0].replace(/\/$/, '');
-        if (cleanReferer && !candidates.includes(cleanReferer)) candidates.push(cleanReferer);
-      }
-
-      // Candidate 5: Empty / Omitted (Standard for FB.login JS SDK)
-      candidates.push('');
-
-      let lastError = null;
-      for (const uri of candidates) {
-        try {
-          const exchangeParams = {
-            client_id: FACEBOOK_APP_ID,
-            client_secret: FACEBOOK_APP_SECRET,
-            code: code,
-          };
-          if (uri) {
-            exchangeParams.redirect_uri = uri;
-          }
-
-          const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
-            params: exchangeParams,
-          });
-
-          if (tokenRes.data?.access_token) {
-            accessToken = tokenRes.data.access_token;
-            console.log('[META_OAUTH_EXCHANGE_DEBUG] Code exchange succeeded with redirect_uri candidate');
-            break;
-          }
-        } catch (err) {
-          lastError = err;
-          const metaErrMsg = err.response?.data?.error?.message || err.message;
-          console.warn(`[META_OAUTH_EXCHANGE_DEBUG] Candidate redirect_uri notice: ${metaErrMsg}`);
-          // If error is not a redirect_uri mismatch, break early
-          if (!metaErrMsg.includes('Error validating verification code') && !metaErrMsg.includes('redirect_uri')) {
-            break;
-          }
+        if (tokenRes.data?.access_token) {
+          accessToken = tokenRes.data.access_token;
         }
-      }
-
-      if (!accessToken && lastError) {
-        console.error('Code exchange failed for all redirect_uri candidates:', lastError.response?.data || lastError.message);
-        const metaError = lastError.response?.data?.error?.message || lastError.message;
-        const userMsg = metaError.includes('Error validating verification code')
-          ? 'Meta authorization could not be completed. Please restart Connect WhatsApp and try again.'
-          : `Meta OAuth authorization failed: ${metaError}`;
-        return errorResponse(res, userMsg, 400);
+      } catch (err) {
+        console.error('Code exchange failed:', err.response?.data || err.message);
+        const metaError = err.response?.data?.error?.message || err.message;
+        return errorResponse(res, `Meta OAuth authorization failed: ${metaError}`, 400);
       }
     }
 
