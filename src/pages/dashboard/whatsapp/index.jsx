@@ -230,6 +230,7 @@ export default function WhatsAppHub() {
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
     let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '';
 
+    let startResData = null;
     try {
       const startRes = await api.get('/meta/embedded-signup/start');
 
@@ -248,6 +249,7 @@ export default function WhatsAppHub() {
 
       // TASK 6: Universal Response Shape Extraction
       if (startRes) {
+        startResData = startRes.data || startRes;
         if (startRes.appId) appId = startRes.appId;
         if (startRes.data?.appId) appId = startRes.data.appId;
 
@@ -312,14 +314,23 @@ export default function WhatsAppHub() {
         } catch (e) {}
       }
 
+      const apiExtras = startResData?.extras || {};
+      const sessionInfoVersion = apiExtras.sessionInfoVersion || '3';
+
+      console.log('[META_SESSION_VERSION]', {
+        sessionInfoVersion,
+        configIdPresent: Boolean(configId),
+        responseType: 'code',
+      });
+
       const loginOptions = {
-        scope: 'whatsapp_business_management,whatsapp_business_messaging',
+        scope: startResData?.scope || 'whatsapp_business_management,whatsapp_business_messaging',
         response_type: 'code',
         override_default_response_type: true,
         extras: {
-          setup: {},
-          featureType: '',
-          sessionInfoVersion: '3',
+          setup: apiExtras.setup || {},
+          featureType: apiExtras.featureType || '',
+          sessionInfoVersion: sessionInfoVersion,
         },
       };
       if (configId) {

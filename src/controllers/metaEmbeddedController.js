@@ -43,7 +43,7 @@ export const startEmbeddedSignup = async (req, res) => {
         extras: {
           setup: {},
           featureType: '',
-          sessionInfoVersion: '2',
+          sessionInfoVersion: '3',
         },
       },
       appId: FACEBOOK_APP_ID,
