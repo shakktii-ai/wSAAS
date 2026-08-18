@@ -135,14 +135,21 @@ export default function SaaSOnboardingWizard() {
             }
             tryCompleteMetaExchange();
           } else if (data.event === 'CANCEL') {
-            console.log('[META_OAUTH_FLOW] Embedded Signup session CANCELLED');
+            console.log('[META_EMBEDDED_CANCEL]', {
+              origin: event.origin,
+              timestamp: new Date().toISOString(),
+            });
             if (embeddedTimeoutRef.current) {
               clearTimeout(embeddedTimeoutRef.current);
               embeddedTimeoutRef.current = null;
             }
             setConnecting(false);
           } else if (data.event === 'ERROR') {
-            console.warn('[META_OAUTH_FLOW] Embedded Signup session ERROR');
+            console.warn('[META_EMBEDDED_ERROR]', {
+              origin: event.origin,
+              errorData: data.data || null,
+              timestamp: new Date().toISOString(),
+            });
             if (embeddedTimeoutRef.current) {
               clearTimeout(embeddedTimeoutRef.current);
               embeddedTimeoutRef.current = null;
@@ -210,7 +217,12 @@ export default function SaaSOnboardingWizard() {
     // 120s Timeout Guard
     embeddedTimeoutRef.current = setTimeout(() => {
       if (!isExchangingRef.current) {
-        console.warn('[META_OAUTH_FLOW] Embedded Signup launch timed out after 120s');
+        console.warn('[META_EMBEDDED_TIMEOUT]', {
+          hasCode: Boolean(oauthCodeRef.current),
+          hasWabaId: Boolean(embeddedSessionRef.current?.wabaId),
+          hasPhoneNumberId: Boolean(embeddedSessionRef.current?.phoneNumberId),
+          timestamp: new Date().toISOString(),
+        });
         setConnecting(false);
       }
     }, 120000);
@@ -305,18 +317,17 @@ export default function SaaSOnboardingWizard() {
 
       const apiExtras = startResData?.extras || {};
       const sessionInfoVersion = apiExtras.sessionInfoVersion || '3';
-      const featureType = apiExtras.featureType || 'whatsapp_business_app_onboarding';
       const version = apiExtras.version || 'v4';
 
       console.log('[META_SESSION_VERSION]', {
         sessionInfoVersion,
-        featureType,
+        featureTypePresent: Boolean(apiExtras.featureType),
         version,
         configIdPresent: Boolean(configId),
         responseType: 'code',
       });
 
-      // TASK 8: Log safe metadata before FB.login authorization request
+      // TASK 6: Log safe metadata before FB.login authorization request
       console.log('[META_OAUTH_AUTH_REQUEST]', {
         appId: appId || '2805534946480538',
         configId,
@@ -324,7 +335,7 @@ export default function SaaSOnboardingWizard() {
         overrideDefaultResponseType: true,
         esVersion: version,
         sessionInfoVersion,
-        featureType,
+        featureTypePresent: Boolean(apiExtras.featureType),
         origin: typeof window !== 'undefined' ? window.location.origin : '',
         pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
@@ -341,11 +352,13 @@ export default function SaaSOnboardingWizard() {
         override_default_response_type: true,
         extras: {
           setup: apiExtras.setup || {},
-          featureType: featureType,
           sessionInfoVersion: sessionInfoVersion,
           version: version,
         },
       };
+      if (apiExtras.featureType) {
+        loginOptions.extras.featureType = apiExtras.featureType;
+      }
       if (configId) {
         loginOptions.config_id = configId;
       }
@@ -371,10 +384,10 @@ export default function SaaSOnboardingWizard() {
           if (code) {
             oauthCodeRef.current = code;
             tryCompleteMetaExchange();
-          } else if (!code && !accessToken) {
-            setConnecting(false);
-            if (response?.status !== 'unknown') {
-              setErrorMessage('Meta authorization code was not returned. Please ensure popup is permitted and complete Embedded Signup.');
+          } else {
+            // Task 9: If hasCode: false & hasAccessToken: true after CANCEL, do NOT exchange. Reset UI loading state if session finished without code.
+            if (!embeddedSessionRef.current.wabaId) {
+              setConnecting(false);
             }
           }
         },
