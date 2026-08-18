@@ -37,6 +37,7 @@ export default function WhatsAppHub() {
   const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
   const oauthCodeRef = React.useRef(null);
   const isExchangingRef = React.useRef(false);
+  const embeddedTimeoutRef = React.useRef(null);
 
   const getRedirectUri = () => {
     if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
@@ -70,6 +71,10 @@ export default function WhatsAppHub() {
     });
 
     if (code && wabaId && phoneNumberId && !isExchangingRef.current) {
+      if (embeddedTimeoutRef.current) {
+        clearTimeout(embeddedTimeoutRef.current);
+        embeddedTimeoutRef.current = null;
+      }
       isExchangingRef.current = true;
       completeExchange({
         code,
@@ -106,10 +111,26 @@ export default function WhatsAppHub() {
 
     // Listen to Meta Embedded Signup session events from popup window
     const handleMetaMessage = (event) => {
-      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+      const allowedOrigins = [
+        'https://www.facebook.com',
+        'https://web.facebook.com',
+        'https://facebook.com',
+      ];
+      const isAllowedOrigin = allowedOrigins.includes(event.origin) || (event.origin && event.origin.endsWith('.facebook.com'));
+      if (!isAllowedOrigin) return;
+
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+        if (data && typeof data === 'object' && data.type === 'WA_EMBEDDED_SIGNUP') {
+          console.log('[META_EMBEDDED_MESSAGE_RECEIVED]', {
+            origin: event.origin,
+            messageType: data.type,
+            event: data.event || 'UNKNOWN',
+            hasWabaId: Boolean(data.data?.waba_id),
+            hasPhoneNumberId: Boolean(data.data?.phone_number_id),
+            version: data.data?.version || 'UNKNOWN',
+          });
+
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
             embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
@@ -118,10 +139,26 @@ export default function WhatsAppHub() {
               hasWabaId: Boolean(waba_id),
               hasPhoneNumberId: Boolean(phone_number_id),
             });
+            if (embeddedTimeoutRef.current) {
+              clearTimeout(embeddedTimeoutRef.current);
+              embeddedTimeoutRef.current = null;
+            }
             tryCompleteMetaExchange();
           } else if (data.event === 'CANCEL') {
             console.log('[META_OAUTH_FLOW] Embedded Signup session CANCELLED');
+            if (embeddedTimeoutRef.current) {
+              clearTimeout(embeddedTimeoutRef.current);
+              embeddedTimeoutRef.current = null;
+            }
             setConnecting(false);
+          } else if (data.event === 'ERROR') {
+            console.warn('[META_OAUTH_FLOW] Embedded Signup session ERROR');
+            if (embeddedTimeoutRef.current) {
+              clearTimeout(embeddedTimeoutRef.current);
+              embeddedTimeoutRef.current = null;
+            }
+            setConnecting(false);
+            alert('Meta Embedded Signup encountered an error during configuration.');
           }
         }
       } catch (e) {
@@ -130,7 +167,12 @@ export default function WhatsAppHub() {
     };
 
     window.addEventListener('message', handleMetaMessage);
-    return () => window.removeEventListener('message', handleMetaMessage);
+    return () => {
+      window.removeEventListener('message', handleMetaMessage);
+      if (embeddedTimeoutRef.current) {
+        clearTimeout(embeddedTimeoutRef.current);
+      }
+    };
   }, []);
 
   const completeExchange = async (payload) => {
@@ -158,6 +200,10 @@ export default function WhatsAppHub() {
     } finally {
       setConnecting(false);
       isExchangingRef.current = false;
+      if (embeddedTimeoutRef.current) {
+        clearTimeout(embeddedTimeoutRef.current);
+        embeddedTimeoutRef.current = null;
+      }
     }
   };
 
@@ -168,6 +214,17 @@ export default function WhatsAppHub() {
     isExchangingRef.current = false;
     oauthCodeRef.current = null;
     embeddedSessionRef.current = { wabaId: null, phoneNumberId: null };
+
+    if (embeddedTimeoutRef.current) {
+      clearTimeout(embeddedTimeoutRef.current);
+    }
+    // 120s Timeout Guard
+    embeddedTimeoutRef.current = setTimeout(() => {
+      if (!isExchangingRef.current) {
+        console.warn('[META_OAUTH_FLOW] Embedded Signup launch timed out after 120s');
+        setConnecting(false);
+      }
+    }, 120000);
 
     const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
@@ -224,6 +281,10 @@ export default function WhatsAppHub() {
         timestamp: new Date().toISOString(),
       });
       setConnecting(false);
+      if (embeddedTimeoutRef.current) {
+        clearTimeout(embeddedTimeoutRef.current);
+        embeddedTimeoutRef.current = null;
+      }
       alert('Meta Embedded Signup configuration ID is missing. Please ensure META_EMBEDDED_SIGNUP_CONFIG_ID or META_CONFIG_ID is set in Vercel environment.');
       return;
     }
@@ -258,7 +319,7 @@ export default function WhatsAppHub() {
         extras: {
           setup: {},
           featureType: '',
-          sessionInfoVersion: '2',
+          sessionInfoVersion: '3',
         },
       };
       if (configId) {
