@@ -362,6 +362,15 @@ export default function SaaSOnboardingWizard() {
         loginOptions.config_id = configId;
       }
 
+      // TASK 3: Add safe client-side diagnostic for Meta popup onboarding stage
+      console.log('[META_ONBOARDING_BLOCK]', {
+        stage: 'EMBEDDED_SIGNUP_LAUNCHED',
+        configId,
+        featureType: loginOptions.extras?.featureType || 'NONE',
+        esVersion: loginOptions.extras?.version || 'v4',
+        sessionInfoVersion: loginOptions.extras?.sessionInfoVersion || '3',
+      });
+
       window.FB.login(
         (response) => {
           const code = response?.authResponse?.code;
