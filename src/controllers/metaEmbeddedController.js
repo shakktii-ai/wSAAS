@@ -51,7 +51,7 @@ export const startEmbeddedSignup = async (req, res) => {
         configId: configId,
         config_id: configId,
         apiVersion: META_API_VERSION,
-        scope: 'whatsapp_business_management,whatsapp_business_messaging',
+        scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
         responseType: 'code',
         extras: extrasPayload,
       },
@@ -74,13 +74,10 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken } = req.body;
 
-    // BACKEND OWNS THE TOKEN-EXCHANGE REDIRECT URI
-    const redirectUri = process.env.META_OAUTH_REDIRECT_URI || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/` : 'https://w-saas.vercel.app/');
-
-    if (!redirectUri && code) {
-      console.error('[META_OAUTH_CONFIG_ERROR] META_OAUTH_REDIRECT_URI is missing in server environment.');
-      return errorResponse(res, 'Server OAuth configuration error: META_OAUTH_REDIRECT_URI is not set on the server.', 500);
-    }
+    // FOR FB.login JS SDK CODE EXCHANGE, REDIRECT_URI MUST BE "" (EMPTY STRING) IF NOT SPECIFIED OR SET TO ""
+    const redirectUri = process.env.META_OAUTH_REDIRECT_URI !== undefined
+      ? process.env.META_OAUTH_REDIRECT_URI
+      : '';
 
     // TASK 12: SAFE SERVER DIAGNOSTICS LOG BEFORE GRAPH API EXCHANGE
     console.log('[META_TOKEN_EXCHANGE_REQUEST]', {
@@ -241,6 +238,18 @@ export const exchangeToken = async (req, res) => {
 
     if (!displayPhoneNumber) {
       displayPhoneNumber = req.company?.phone || '';
+    }
+
+    // Register phone number on Meta Cloud API so phone status changes from Offline to Connected / Active
+    try {
+      await axios.post(
+        `https://graph.facebook.com/${META_API_VERSION}/${phoneNumberId}/register`,
+        { messaging_product: 'whatsapp', pin: '654321' },
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      console.log(`[Meta Embedded Signup] Registered Phone Number ID ${phoneNumberId} with Meta Cloud API`);
+    } catch (regErr) {
+      console.warn('[Meta Embedded Signup] Phone number registration notice:', regErr.response?.data || regErr.message);
     }
 
     // Save Connected Meta WABA Credentials to Company Document
