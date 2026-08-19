@@ -59,7 +59,7 @@ export default function WhatsAppHub() {
       exchangeStarted: isExchangingRef.current,
     });
 
-    if (code && wabaId && phoneNumberId && !isExchangingRef.current) {
+    if (code && wabaId && !isExchangingRef.current) {
       if (embeddedTimeoutRef.current) {
         clearTimeout(embeddedTimeoutRef.current);
         embeddedTimeoutRef.current = null;
@@ -68,7 +68,7 @@ export default function WhatsAppHub() {
       completeExchange({
         code,
         wabaId,
-        phoneNumberId,
+        phoneNumberId: phoneNumberId || null,
       });
     }
   };

@@ -54,7 +54,7 @@ export default function SaaSOnboardingWizard() {
       exchangeStarted: isExchangingRef.current,
     });
 
-    if (code && wabaId && phoneNumberId && !isExchangingRef.current) {
+    if (code && wabaId && !isExchangingRef.current) {
       if (embeddedTimeoutRef.current) {
         clearTimeout(embeddedTimeoutRef.current);
         embeddedTimeoutRef.current = null;
@@ -63,7 +63,7 @@ export default function SaaSOnboardingWizard() {
       completeExchange({
         code,
         wabaId,
-        phoneNumberId,
+        phoneNumberId: phoneNumberId || null,
       });
     }
   };
