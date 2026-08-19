@@ -216,6 +216,9 @@ export const exchangeToken = async (req, res) => {
       console.warn('WABA meta lookup fallback:', e.message);
     }
 
+    let phoneStatus = 'CONNECTED';
+    let codeVerificationStatus = 'VERIFIED';
+
     // Fetch Phone Numbers for WABA
     try {
       const phoneRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/${wabaId}/phone_numbers`, {
@@ -227,6 +230,8 @@ export const exchangeToken = async (req, res) => {
         displayPhoneNumber = phoneObj.display_phone_number || phoneObj.verified_name || '';
         qualityRating = phoneObj.quality_rating || 'GREEN';
         messagingLimit = phoneObj.messaging_limit_tier || 'TIER_1K';
+        phoneStatus = (phoneObj.status || 'CONNECTED').toUpperCase();
+        codeVerificationStatus = (phoneObj.code_verification_status || 'VERIFIED').toUpperCase();
       }
     } catch (e) {
       console.warn('Phone numbers lookup fallback:', e.message);
@@ -240,16 +245,34 @@ export const exchangeToken = async (req, res) => {
       displayPhoneNumber = req.company?.phone || '';
     }
 
-    // Register phone number on Meta Cloud API so phone status changes from Offline to Connected / Active
-    try {
-      await axios.post(
-        `https://graph.facebook.com/${META_API_VERSION}/${phoneNumberId}/register`,
-        { messaging_product: 'whatsapp', pin: '654321' },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      console.log(`[Meta Embedded Signup] Registered Phone Number ID ${phoneNumberId} with Meta Cloud API`);
-    } catch (regErr) {
-      console.warn('[Meta Embedded Signup] Phone number registration notice:', regErr.response?.data || regErr.message);
+    // Check if Meta registration is required on Cloud API
+    const isAlreadyConnected = phoneStatus === 'CONNECTED' || codeVerificationStatus === 'VERIFIED';
+    const requestPin = req.body.pin || process.env.META_DEFAULT_PIN || '';
+
+    if (!isAlreadyConnected) {
+      if (!requestPin) {
+        return errorResponse(
+          res,
+          'Phone number requires explicit Cloud API registration. Please provide your 6-digit two-step verification PIN.',
+          400
+        );
+      }
+      try {
+        await axios.post(
+          `https://graph.facebook.com/${META_API_VERSION}/${phoneNumberId}/register`,
+          { messaging_product: 'whatsapp', pin: requestPin },
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        console.log(`[Meta Embedded Signup] Registered Phone Number ID ${phoneNumberId} with Meta Cloud API`);
+      } catch (regErr) {
+        const metaError = regErr.response?.data?.error?.message || regErr.message;
+        console.error('[Meta Embedded Signup] Phone number registration failed:', metaError);
+        return errorResponse(
+          res,
+          `WhatsApp Phone Number registration failed: ${metaError}. Connection could not be established.`,
+          400
+        );
+      }
     }
 
     // Save Connected Meta WABA Credentials to Company Document
