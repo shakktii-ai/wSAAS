@@ -29,21 +29,10 @@ export default function WhatsAppHub() {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // Manual fallback inputs modal
-  const [showManualModal, setShowManualModal] = useState(false);
-  const [manualPhoneId, setManualPhoneId] = useState('');
-  const [manualWabaId, setManualWabaId] = useState('');
-
   const embeddedSessionRef = React.useRef({ wabaId: null, phoneNumberId: null });
   const oauthCodeRef = React.useRef(null);
   const isExchangingRef = React.useRef(false);
   const embeddedTimeoutRef = React.useRef(null);
-
-  const getRedirectUri = () => {
-    if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
-    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
-    return `${origin.replace(/\/$/, '')}/`;
-  };
 
   const fetchAccount = async () => {
     try {
@@ -80,7 +69,6 @@ export default function WhatsAppHub() {
         code,
         wabaId,
         phoneNumberId,
-        redirectUri: getRedirectUri(),
       });
     }
   };
@@ -185,17 +173,21 @@ export default function WhatsAppHub() {
   const completeExchange = async (payload) => {
     try {
       setConnecting(true);
-      const redirectUri = payload.redirectUri || getRedirectUri();
-      const finalPayload = { ...payload, redirectUri };
+      // Frontend sends ONLY code, wabaId, phoneNumberId (Backend owns token-exchange redirect URI)
+      const cleanPayload = {
+        code: payload.code,
+        wabaId: payload.wabaId,
+        phoneNumberId: payload.phoneNumberId,
+      };
 
       console.log('[META_OAUTH_FLOW]', {
         stage: 'EXCHANGE_STARTED',
-        hasCode: Boolean(finalPayload.code),
-        hasWabaId: Boolean(finalPayload.wabaId),
-        hasPhoneNumberId: Boolean(finalPayload.phoneNumberId),
+        hasCode: Boolean(cleanPayload.code),
+        hasWabaId: Boolean(cleanPayload.wabaId),
+        hasPhoneNumberId: Boolean(cleanPayload.phoneNumberId),
       });
 
-      const res = await api.post('/meta/exchange-token', finalPayload);
+      const res = await api.post('/meta/exchange-token', cleanPayload);
       if (res.success) {
         alert('WhatsApp Business Account connected successfully!');
         fetchAccount();
@@ -238,7 +230,6 @@ export default function WhatsAppHub() {
       }
     }, 120000);
 
-    const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
     let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '';
 
@@ -352,12 +343,6 @@ export default function WhatsAppHub() {
         pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
 
-      console.log('[META_OAUTH_REDIRECT_EXACT]', {
-        redirectUri: redirectUri,
-        origin: typeof window !== 'undefined' ? window.location.origin : '',
-        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
-      });
-
       const loginOptions = {
         scope: startResData?.scope || 'whatsapp_business_management,whatsapp_business_messaging',
         response_type: 'code',
@@ -435,24 +420,15 @@ export default function WhatsAppHub() {
         js.src = 'https://connect.facebook.net/en_US/sdk.js';
         js.onload = () => {
           if (window.FB) initAndLogin();
-          else setShowManualModal(true);
+          else setConnecting(false);
         };
         js.onerror = () => {
-          setShowManualModal(true);
           setConnecting(false);
+          alert('Facebook SDK failed to load. Please check your internet connection or ad-blocker settings.');
         };
         fjs.parentNode.insertBefore(js, fjs);
       })(document, 'script', 'facebook-jssdk');
     }
-  };
-
-  const handleManualConnect = async (e) => {
-    e.preventDefault();
-    await completeExchange({
-      phoneNumberId: manualPhoneId || process.env.META_PHONE_NUMBER_ID,
-      wabaId: manualWabaId || process.env.META_WABA_ID,
-    });
-    setShowManualModal(false);
   };
 
   const handleSyncTemplates = async () => {
@@ -659,46 +635,6 @@ export default function WhatsAppHub() {
           </div>
         </Card>
       </div>
-
-      {/* Manual Connection Modal Fallback */}
-      <Modal isOpen={showManualModal} onClose={() => setShowManualModal(false)} title="Connect Meta WABA Credentials">
-        <form onSubmit={handleManualConnect} className="space-y-4 text-xs">
-          <p className="text-slate-600 font-medium">
-            Enter your Meta Phone Number ID and WABA ID to complete instant connection:
-          </p>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">Phone Number ID</label>
-            <input
-              type="text"
-              value={manualPhoneId}
-              onChange={(e) => setManualPhoneId(e.target.value)}
-              placeholder="e.g. 100000000000000"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-700 font-semibold mb-1">WABA ID</label>
-            <input
-              type="text"
-              value={manualWabaId}
-              onChange={(e) => setManualWabaId(e.target.value)}
-              placeholder="e.g. 200000000000000"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-emerald-600"
-            />
-          </div>
-
-          <div className="pt-2 flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={() => setShowManualModal(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={connecting}>
-              Connect WABA Account
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </DashboardLayout>
   );
 }

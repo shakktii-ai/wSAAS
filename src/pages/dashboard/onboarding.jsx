@@ -43,12 +43,6 @@ export default function SaaSOnboardingWizard() {
   const isExchangingRef = React.useRef(false);
   const embeddedTimeoutRef = React.useRef(null);
 
-  const getRedirectUri = () => {
-    if (process.env.META_OAUTH_REDIRECT_URI) return process.env.META_OAUTH_REDIRECT_URI;
-    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app');
-    return `${origin.replace(/\/$/, '')}/`;
-  };
-
   const tryCompleteMetaExchange = () => {
     const code = oauthCodeRef.current;
     const { wabaId, phoneNumberId } = embeddedSessionRef.current;
@@ -70,7 +64,6 @@ export default function SaaSOnboardingWizard() {
         code,
         wabaId,
         phoneNumberId,
-        redirectUri: getRedirectUri(),
       });
     }
   };
@@ -175,17 +168,21 @@ export default function SaaSOnboardingWizard() {
   const completeExchange = async (payload) => {
     try {
       setConnecting(true);
-      const redirectUri = payload.redirectUri || getRedirectUri();
-      const finalPayload = { ...payload, redirectUri };
+      // Frontend sends ONLY code, wabaId, phoneNumberId (Backend owns token-exchange redirect URI)
+      const cleanPayload = {
+        code: payload.code,
+        wabaId: payload.wabaId,
+        phoneNumberId: payload.phoneNumberId,
+      };
 
       console.log('[META_OAUTH_FLOW]', {
         stage: 'EXCHANGE_STARTED',
-        hasCode: Boolean(finalPayload.code),
-        hasWabaId: Boolean(finalPayload.wabaId),
-        hasPhoneNumberId: Boolean(finalPayload.phoneNumberId),
+        hasCode: Boolean(cleanPayload.code),
+        hasWabaId: Boolean(cleanPayload.wabaId),
+        hasPhoneNumberId: Boolean(cleanPayload.phoneNumberId),
       });
 
-      const res = await api.post('/meta/exchange-token', finalPayload);
+      const res = await api.post('/meta/exchange-token', cleanPayload);
       if (res.success) {
         fetchOnboardingData();
       } else {
@@ -227,7 +224,6 @@ export default function SaaSOnboardingWizard() {
       }
     }, 120000);
 
-    const redirectUri = getRedirectUri();
     let appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '';
     let configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '';
 

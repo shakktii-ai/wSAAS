@@ -64,81 +64,37 @@ export const exchangeToken = async (req, res) => {
   try {
     await connectDB();
     const companyId = req.company._id;
-    const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken, redirectUri: inputRedirectUri } = req.body;
+    const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken } = req.body;
 
-    // Standardized base URL & redirect URI resolution
-    const baseAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://w-saas.vercel.app').replace(/\/$/, '');
-    const exchangeRedirectUri = process.env.META_OAUTH_REDIRECT_URI || inputRedirectUri || `${baseAppUrl}/`;
+    // BACKEND OWNS THE TOKEN-EXCHANGE REDIRECT URI
+    const redirectUri = process.env.META_OAUTH_REDIRECT_URI || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/` : 'https://w-saas.vercel.app/');
 
-    // TASK 7 & 8: SAFE EXACT TOKEN EXCHANGE METADATA LOGS
-    console.log('[META_TOKEN_EXCHANGE_EXACT]', {
-      redirectUri: exchangeRedirectUri,
-      redirectUriLength: exchangeRedirectUri ? exchangeRedirectUri.length : 0,
-      hasCode: Boolean(code),
-      clientId: FACEBOOK_APP_ID,
-    });
+    if (!redirectUri && code) {
+      console.error('[META_OAUTH_CONFIG_ERROR] META_OAUTH_REDIRECT_URI is missing in server environment.');
+      return errorResponse(res, 'Server OAuth configuration error: META_OAUTH_REDIRECT_URI is not set on the server.', 500);
+    }
 
+    // TASK 12: SAFE SERVER DIAGNOSTICS LOG BEFORE GRAPH API EXCHANGE
     console.log('[META_TOKEN_EXCHANGE_REQUEST]', {
       clientId: FACEBOOK_APP_ID,
-      redirectUri: exchangeRedirectUri,
-      redirectUriLength: exchangeRedirectUri ? exchangeRedirectUri.length : 0,
+      redirectUri: redirectUri,
+      redirectUriLength: redirectUri ? redirectUri.length : 0,
       hasCode: Boolean(code),
       hasWabaId: Boolean(inputWabaId),
       hasPhoneNumberId: Boolean(inputPhoneId),
     });
 
-    // TASK 4: SAFE CONFIG AUDIT LOG
-    console.log('[META_CONFIG_AUDIT]', {
-      appId: FACEBOOK_APP_ID,
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
-      configIdMatchesExpectedApp: true,
-    });
-
-    // TASK 5: SAFE APP ID AUDIT LOG
-    console.log('[META_APP_ID_DEBUG]', {
-      frontendAppId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '',
-      backendAppId: FACEBOOK_APP_ID,
-      appIdsMatch: Boolean(FACEBOOK_APP_ID && (process.env.NEXT_PUBLIC_FACEBOOK_APP_ID === FACEBOOK_APP_ID)),
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
-    });
-
-    // TASK 6 & 12: SAFE TOKEN EXCHANGE AUDIT LOG
-    console.log('[META_TOKEN_EXCHANGE_AUDIT]', {
-      appId: FACEBOOK_APP_ID,
-      hasCode: Boolean(code),
-      hasAppSecret: Boolean(FACEBOOK_APP_SECRET),
-      redirectUriUsed: exchangeRedirectUri,
-      graphApiVersion: META_API_VERSION,
-    });
-
-    // TASK 12: SAFE DEFINITIVE DEBUG POINT LOG
-    console.log('[META_FINAL_OAUTH_EXCHANGE]', {
-      authorizationCodePresent: Boolean(code),
-      authorizationRequestRedirectUri: inputRedirectUri || exchangeRedirectUri,
-      exchangeRedirectUri: exchangeRedirectUri,
-      redirectUrisEqual: Boolean(inputRedirectUri ? inputRedirectUri === exchangeRedirectUri : true),
-      appIdsEqual: Boolean(FACEBOOK_APP_ID && process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? FACEBOOK_APP_ID === process.env.NEXT_PUBLIC_FACEBOOK_APP_ID : true),
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
-    });
-
-    console.log('[META_OAUTH_FLOW]', {
-      stage: 'EXCHANGE_REQUEST',
-      redirectUri: exchangeRedirectUri,
-      appId: FACEBOOK_APP_ID,
-      configIdPresent: Boolean(process.env.META_EMBEDDED_SIGNUP_CONFIG_ID || process.env.META_CONFIG_ID || process.env.NEXT_PUBLIC_META_CONFIG_ID),
-    });
-
     let accessToken = customAccessToken || '';
     let tokenExpiry = null;
 
-    // Exchange Auth Code for User Access Token (Single exact call, NO candidate loop)
+    // Exchange Auth Code for User Access Token (Single exact server-to-server call, NO candidate loop)
     if (code && !accessToken) {
       try {
         const exchangeParams = {
           client_id: FACEBOOK_APP_ID,
           client_secret: FACEBOOK_APP_SECRET,
           code: code,
-          redirect_uri: exchangeRedirectUri,
+          redirect_uri: redirectUri,
         };
 
         const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
@@ -150,25 +106,19 @@ export const exchangeToken = async (req, res) => {
           console.log('[META_TOKEN_EXCHANGE_RESPONSE]', {
             success: true,
             statusCode: 200,
-            error: null,
+            metaErrorCode: null,
+            metaErrorType: null,
+            metaErrorMessage: null,
           });
-          console.log('[META_OAUTH_FLOW]', { stage: 'EXCHANGE_SUCCESS' });
         }
       } catch (err) {
         const metaErrObj = err.response?.data?.error || {};
         console.log('[META_TOKEN_EXCHANGE_RESPONSE]', {
           success: false,
           statusCode: err.response?.status || 400,
-          errorCode: metaErrObj.code || 400,
-          errorSubcode: metaErrObj.error_subcode || null,
-          errorType: metaErrObj.type || null,
-          errorMessage: metaErrObj.message || err.message,
-        });
-        console.error('[META_OAUTH_FLOW]', {
-          stage: 'EXCHANGE_FAILED',
-          errorCode: metaErrObj.code || 400,
-          errorSubcode: metaErrObj.error_subcode || null,
-          errorMessage: metaErrObj.message || err.message,
+          metaErrorCode: metaErrObj.code || 400,
+          metaErrorType: metaErrObj.type || null,
+          metaErrorMessage: metaErrObj.message || err.message,
         });
         const metaError = metaErrObj.message || err.message;
         return errorResponse(res, `Meta OAuth authorization failed: ${metaError}`, 400);
