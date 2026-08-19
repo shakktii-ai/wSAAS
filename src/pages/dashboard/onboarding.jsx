@@ -362,6 +362,14 @@ export default function SaaSOnboardingWizard() {
         loginOptions.config_id = configId;
       }
 
+      // TASK 6: Add safe actual OAuth context trace log before FB.login
+      console.log('[META_ACTUAL_OAUTH_CONTEXT]', {
+        hasFallbackRedirectUri: true,
+        hasRedirectUri: true,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      });
+
       // TASK 3: Add safe client-side diagnostic for Meta popup onboarding stage
       console.log('[META_ONBOARDING_BLOCK]', {
         stage: 'EMBEDDED_SIGNUP_LAUNCHED',
