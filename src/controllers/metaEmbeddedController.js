@@ -74,15 +74,13 @@ export const exchangeToken = async (req, res) => {
     const companyId = req.company._id;
     const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId, accessToken: customAccessToken } = req.body;
 
-    // FOR FB.login JS SDK CODE EXCHANGE, REDIRECT_URI MUST BE "" (EMPTY STRING) IF NOT SPECIFIED OR SET TO ""
-    const redirectUri = process.env.META_OAUTH_REDIRECT_URI !== undefined
-      ? process.env.META_OAUTH_REDIRECT_URI
-      : '';
+    // Omit redirect_uri for JS SDK FB.login popup code exchange unless explicitly configured in env
+    const redirectUri = process.env.META_OAUTH_REDIRECT_URI;
 
     // TASK 12: SAFE SERVER DIAGNOSTICS LOG BEFORE GRAPH API EXCHANGE
     console.log('[META_TOKEN_EXCHANGE_REQUEST]', {
       clientId: FACEBOOK_APP_ID,
-      redirectUri: redirectUri,
+      redirectUri: redirectUri || 'OMITTED_FOR_JS_SDK',
       redirectUriLength: redirectUri ? redirectUri.length : 0,
       hasCode: Boolean(code),
       hasWabaId: Boolean(inputWabaId),
@@ -99,8 +97,10 @@ export const exchangeToken = async (req, res) => {
           client_id: FACEBOOK_APP_ID,
           client_secret: FACEBOOK_APP_SECRET,
           code: code,
-          redirect_uri: redirectUri,
         };
+        if (redirectUri && redirectUri.trim() !== '') {
+          exchangeParams.redirect_uri = redirectUri.trim();
+        }
 
         const tokenRes = await axios.get(`https://graph.facebook.com/${META_API_VERSION}/oauth/access_token`, {
           params: exchangeParams,
