@@ -337,12 +337,6 @@ export default function SaaSOnboardingWizard() {
         pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
 
-      console.log('[META_OAUTH_REDIRECT_EXACT]', {
-        redirectUri: redirectUri,
-        origin: typeof window !== 'undefined' ? window.location.origin : '',
-        pathname: typeof window !== 'undefined' ? window.location.pathname : '',
-      });
-
       const loginOptions = {
         scope: startResData?.scope || 'whatsapp_business_management,whatsapp_business_messaging',
         response_type: 'code',
