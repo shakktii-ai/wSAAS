@@ -337,16 +337,21 @@ export default function SaaSOnboardingWizard() {
         pathname: typeof window !== 'undefined' ? window.location.pathname : '',
       });
 
+      const extrasObj = {
+        setup: apiExtras.setup || {},
+        sessionInfoVersion: sessionInfoVersion,
+        version: version,
+      };
+      const resolvedFeatureType = apiExtras.featureType !== undefined ? apiExtras.featureType : featureType;
+      if (resolvedFeatureType) {
+        extrasObj.featureType = resolvedFeatureType;
+      }
+
       const loginOptions = {
         scope: startResData?.scope || 'whatsapp_business_management,whatsapp_business_messaging',
         response_type: 'code',
         override_default_response_type: true,
-        extras: {
-          setup: apiExtras.setup || {},
-          featureType: featureType,
-          sessionInfoVersion: sessionInfoVersion,
-          version: version,
-        },
+        extras: extrasObj,
       };
       if (configId) {
         loginOptions.config_id = configId;

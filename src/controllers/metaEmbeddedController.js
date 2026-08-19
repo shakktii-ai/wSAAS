@@ -31,6 +31,19 @@ export const startEmbeddedSignup = async (req, res) => {
       resolvedConfigIdLength: configId ? configId.length : 0,
     });
 
+    const featureType = process.env.META_FEATURE_TYPE !== undefined
+      ? process.env.META_FEATURE_TYPE
+      : 'whatsapp_business_app_onboarding';
+
+    const extrasPayload = {
+      setup: {},
+      sessionInfoVersion: '3',
+      version: 'v4',
+    };
+    if (featureType) {
+      extrasPayload.featureType = featureType;
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -40,12 +53,7 @@ export const startEmbeddedSignup = async (req, res) => {
         apiVersion: META_API_VERSION,
         scope: 'whatsapp_business_management,whatsapp_business_messaging',
         responseType: 'code',
-        extras: {
-          setup: {},
-          featureType: 'whatsapp_business_app_onboarding',
-          sessionInfoVersion: '3',
-          version: 'v4',
-        },
+        extras: extrasPayload,
       },
       appId: FACEBOOK_APP_ID,
       configId: configId,
