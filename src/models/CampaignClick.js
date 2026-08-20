@@ -16,7 +16,6 @@ const CampaignClickSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     broadcastId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -78,9 +77,6 @@ const CampaignClickSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-// Fast lookup when redirect happens
-CampaignClickSchema.index({ trackingId: 1 }, { unique: true });
 
 // Unique-click check: has this contact already clicked this campaign?
 CampaignClickSchema.index({ broadcastId: 1, contactId: 1 });
