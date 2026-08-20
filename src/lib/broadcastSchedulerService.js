@@ -157,12 +157,61 @@ export async function executeBroadcastCore(broadcast, company, actor = null) {
         await conversation.save();
       }
 
+      // ── Build Meta components array for template parameters ───────────────
+      const metaComponents = [];
+
+      if (broadcast.variables && Array.isArray(broadcast.variables) && broadcast.variables.length > 0) {
+        const bodyParameters = broadcast.variables.map((val) => {
+          let textVal = String(val ?? '').trim();
+
+          // Dynamic variable substitution per recipient contact
+          if (textVal === '{{name}}' || textVal.toLowerCase() === '{{name}}') {
+            textVal = contact.name || 'Customer';
+          } else if (textVal === '{{phone}}' || textVal.toLowerCase() === '{{phone}}') {
+            textVal = contact.phone || '';
+          } else if (textVal === '{{email}}' || textVal.toLowerCase() === '{{email}}') {
+            textVal = contact.email || '';
+          } else if (textVal === '{{company}}' || textVal.toLowerCase() === '{{company}}') {
+            textVal = contact.companyName || '';
+          } else if (textVal === '{{city}}' || textVal.toLowerCase() === '{{city}}') {
+            textVal = contact.city || '';
+          }
+
+          if (!textVal) {
+            textVal = '-';
+          }
+
+          return {
+            type: 'text',
+            text: textVal,
+          };
+        });
+
+        metaComponents.push({
+          type: 'body',
+          parameters: bodyParameters,
+        });
+      }
+
+      if (broadcast.headerMediaUrl) {
+        metaComponents.push({
+          type: 'header',
+          parameters: [
+            {
+              type: 'image',
+              image: { link: broadcast.headerMediaUrl },
+            },
+          ],
+        });
+      }
+
       const metaResult = await sendMetaTemplate({
         phoneNumberId,
         accessToken,
         to: cleanPhone,
         templateName:  broadcast.templateName,
         languageCode:  broadcast.languageCode,
+        components:    metaComponents,
         companyId:     company._id.toString(),
         conversationId: conversation._id.toString(),
         wabaId,

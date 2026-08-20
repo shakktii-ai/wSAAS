@@ -91,6 +91,38 @@ function minDatetimeLocal() {
   return d.toISOString().slice(0, 16);
 }
 
+/**
+ * Parse a template to extract parameter placeholders {{1}}, {{2}}, etc.
+ */
+function parseTemplateVariables(template) {
+  if (!template) return [];
+
+  const bodyText = template.bodyText || '';
+  const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
+
+  if (!matches || matches.length === 0) {
+    return [];
+  }
+
+  // Unique parameter indices in numerical order (1, 2, 3...)
+  const indices = Array.from(new Set(matches.map(m => parseInt(m[1], 10)))).sort((a, b) => a - b);
+
+  return indices.map(idx => {
+    let sample = `Param ${idx}`;
+    if (Array.isArray(template.variables)) {
+      const found = template.variables.find(v => (typeof v === 'object' && (v.index === idx || Number(v.index) === idx)));
+      if (found?.sampleValue || found?.paramName) {
+        sample = found.sampleValue || found.paramName;
+      }
+    }
+    return {
+      index: idx,
+      label: sample,
+      value: '',
+    };
+  });
+}
+
 // ─── Stat card ───────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, color = 'slate' }) {
@@ -125,6 +157,13 @@ export default function BroadcastsManager() {
   const [description, setDescription]  = useState('');
   const [campaignType, setCampaignType] = useState('PROMOTIONAL');
   const [templateName, setTemplateName] = useState('');
+  /** Full template object for the currently selected template */
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  /**
+   * templateVariables: array of { index: Number, label: String, value: String }
+   * Built automatically when templateName changes by parsing bodyText for {{N}} placeholders.
+   */
+  const [templateVariables, setTemplateVariables] = useState([]);
   const [targetType, setTargetType]     = useState('all');
   const [targetValue, setTargetValue]   = useState('');
 
@@ -162,7 +201,12 @@ export default function BroadcastsManager() {
       if (res.success && res.data) {
         const approvedOnly = res.data.filter((t) => t.status === 'APPROVED');
         setTemplates(approvedOnly);
-        if (approvedOnly.length > 0) setTemplateName(approvedOnly[0].name);
+        if (approvedOnly.length > 0) {
+          const first = approvedOnly[0];
+          setTemplateName(first.name);
+          setSelectedTemplate(first);
+          setTemplateVariables(parseTemplateVariables(first));
+        }
       }
     } catch (err) {
       console.error(err);
@@ -180,7 +224,10 @@ export default function BroadcastsManager() {
     setName('');
     setDescription('');
     setCampaignType('PROMOTIONAL');
-    setTemplateName(templates[0]?.name || '');
+    const first = templates[0] || null;
+    setTemplateName(first?.name || '');
+    setSelectedTemplate(first);
+    setTemplateVariables(first ? parseTemplateVariables(first) : []);
     setTargetType('all');
     setTargetValue('');
     setSendMode('now');
@@ -208,6 +255,14 @@ export default function BroadcastsManager() {
     }
 
     try {
+      // Validate all required template variables are filled
+      const missingVars = templateVariables.filter((v) => !v.value.trim());
+      if (missingVars.length > 0) {
+        setCreateError(`Please fill in all template parameters: ${missingVars.map(v => `{{${v.index}}}`).join(', ')}`);
+        setSubmitting(false);
+        return;
+      }
+
       const payload = {
         name,
         description,
@@ -215,6 +270,8 @@ export default function BroadcastsManager() {
         templateName,
         targetType,
         targetValue,
+        // variables: ordered array of values for {{1}}, {{2}}, etc.
+        variables: templateVariables.map((v) => v.value),
         // For 'now': sendNow flag tells server to keep as DRAFT so we execute immediately
         sendNow: sendMode === 'now',
         scheduledAt: sendMode === 'later' ? scheduledAt : undefined,
@@ -612,7 +669,12 @@ export default function BroadcastsManager() {
                 <select
                   required
                   value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
+                  onChange={(e) => {
+                    const chosen = templates.find((t) => t.name === e.target.value) || null;
+                    setTemplateName(e.target.value);
+                    setSelectedTemplate(chosen);
+                    setTemplateVariables(chosen ? parseTemplateVariables(chosen) : []);
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
                 >
                   {templates.length === 0 && (
@@ -626,6 +688,57 @@ export default function BroadcastsManager() {
                 </select>
               </div>
             </div>
+
+            {/* ── Template preview + variable inputs ── */}
+            {selectedTemplate && (
+              <div className="p-3 rounded-xl bg-slate-900 border border-slate-700 space-y-3">
+                {/* Body preview */}
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-1">Template Body Preview</p>
+                  <p className="text-slate-300 text-[11px] leading-relaxed whitespace-pre-wrap">
+                    {selectedTemplate.bodyText || <span className="italic text-slate-600">No body text</span>}
+                  </p>
+                </div>
+
+                {/* Variable inputs */}
+                {templateVariables.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-2">
+                      Template Parameters <span className="text-rose-400">*</span>
+                      <span className="ml-1 normal-case text-slate-600 font-normal">(sent to every recipient)</span>
+                    </p>
+                    <div className="space-y-2">
+                      {templateVariables.map((v, i) => (
+                        <div key={v.index} className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1 flex-shrink-0 w-12 text-center">{`{{${v.index}}}`}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={`Value for {{${v.index}}} e.g. ${v.label}`}
+                            value={v.value}
+                            onChange={(e) => {
+                              const updated = [...templateVariables];
+                              updated[i] = { ...updated[i], value: e.target.value };
+                              setTemplateVariables(updated);
+                            }}
+                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-600 mt-1.5">
+                      These values replace the placeholders in the template body for every recipient.
+                    </p>
+                  </div>
+                )}
+
+                {templateVariables.length === 0 && (
+                  <p className="text-[10px] text-emerald-500/70">
+                    ✓ No variable parameters — this template sends as-is.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Audience */}
             <div className="grid grid-cols-2 gap-3">
