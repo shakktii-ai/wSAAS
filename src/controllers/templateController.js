@@ -113,6 +113,91 @@ export function buildMetaComponents({ headerType, headerText, headerMediaUrl, bo
 }
 
 /**
+ * Parse Meta Graph API template components array into normalized schema fields:
+ * - headerType ('NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT')
+ * - headerText
+ * - headerMediaUrl
+ * - bodyText
+ * - footerText
+ * - buttons (array of { type, text, url, phoneNumber, code })
+ * - variables (array of { index, sampleValue })
+ */
+export function parseMetaComponents(components = []) {
+  let headerType = 'NONE';
+  let headerText = '';
+  let headerMediaUrl = '';
+  let bodyText = '';
+  let footerText = '';
+  const buttons = [];
+  const variables = [];
+
+  if (!Array.isArray(components)) {
+    return { headerType, headerText, headerMediaUrl, bodyText, footerText, buttons, variables };
+  }
+
+  for (const comp of components) {
+    const type = (comp.type || '').toUpperCase();
+
+    if (type === 'HEADER') {
+      headerType = (comp.format || 'TEXT').toUpperCase();
+      if (headerType === 'TEXT') {
+        headerText = comp.text || '';
+      } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
+        headerMediaUrl = comp.example?.header_handle?.[0] || comp.example?.header_url || '';
+      }
+    } else if (type === 'BODY') {
+      bodyText = comp.text || '';
+
+      // Meta sample values from example.body_text
+      // example: { body_text: [["sample1", "sample2"]] }
+      const samples = comp.example?.body_text?.[0] || [];
+
+      // Extract {{1}}, {{2}}...
+      const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
+      if (matches && matches.length > 0) {
+        const indices = Array.from(new Set(matches.map(m => parseInt(m[1], 10)))).sort((a, b) => a - b);
+        indices.forEach((idx, i) => {
+          const sampleVal = samples[i] || `Sample_${idx}`;
+          variables.push({
+            index: idx,
+            sampleValue: String(sampleVal),
+          });
+        });
+      }
+    } else if (type === 'FOOTER') {
+      footerText = comp.text || '';
+    } else if (type === 'BUTTONS') {
+      const rawBtns = comp.buttons || [];
+      for (const btn of rawBtns) {
+        const btnType = (btn.type || 'QUICK_REPLY').toUpperCase();
+        const btnObj = {
+          type: btnType,
+          text: btn.text || '',
+        };
+        if (btnType === 'URL') {
+          btnObj.url = btn.url || '';
+        } else if (btnType === 'PHONE_NUMBER') {
+          btnObj.phoneNumber = btn.phone_number || btn.phoneNumber || '';
+        } else if (btnType === 'COPY_CODE') {
+          btnObj.code = btn.example?.[0] || btn.code || '';
+        }
+        buttons.push(btnObj);
+      }
+    }
+  }
+
+  return {
+    headerType,
+    headerText,
+    headerMediaUrl,
+    bodyText,
+    footerText,
+    buttons,
+    variables,
+  };
+}
+
+/**
  * Helper for rejection suggested fixes
  */
 export function parseRejectionDetails(metaReason, category) {
@@ -186,7 +271,42 @@ export const getTemplates = async (req, res) => {
     else if (sort === 'lastSynced') sortOptions = { syncedAt: -1 };
 
     const templates = await WhatsAppTemplate.find(filter).sort(sortOptions);
-    return successResponse(res, templates);
+
+    // Auto-heal any existing templates that have empty bodyText but non-empty components
+    const sanitizedTemplates = await Promise.all(
+      templates.map(async (tpl) => {
+        if ((!tpl.bodyText || !tpl.bodyText.trim()) && Array.isArray(tpl.components) && tpl.components.length > 0) {
+          const parsed = parseMetaComponents(tpl.components);
+          if (parsed.bodyText) {
+            tpl.bodyText = parsed.bodyText;
+            tpl.headerType = parsed.headerType;
+            if (parsed.headerText) tpl.headerText = parsed.headerText;
+            if (parsed.headerMediaUrl) tpl.headerMediaUrl = parsed.headerMediaUrl;
+            if (parsed.footerText) tpl.footerText = parsed.footerText;
+            if (parsed.buttons.length > 0) tpl.buttons = parsed.buttons;
+            if (parsed.variables.length > 0) tpl.variables = parsed.variables;
+
+            await WhatsAppTemplate.updateOne(
+              { _id: tpl._id },
+              {
+                $set: {
+                  bodyText: parsed.bodyText,
+                  headerType: parsed.headerType,
+                  headerText: parsed.headerText,
+                  headerMediaUrl: parsed.headerMediaUrl,
+                  footerText: parsed.footerText,
+                  buttons: parsed.buttons,
+                  variables: parsed.variables,
+                },
+              }
+            );
+          }
+        }
+        return tpl;
+      })
+    );
+
+    return successResponse(res, sanitizedTemplates);
   } catch (error) {
     console.error('getTemplates Error:', error);
     return errorResponse(res, 'Failed to fetch templates', 500);
@@ -204,6 +324,34 @@ export const getTemplateById = async (req, res) => {
 
     if (!template) {
       return errorResponse(res, 'Template not found', 404);
+    }
+
+    if ((!template.bodyText || !template.bodyText.trim()) && Array.isArray(template.components) && template.components.length > 0) {
+      const parsed = parseMetaComponents(template.components);
+      if (parsed.bodyText) {
+        template.bodyText = parsed.bodyText;
+        template.headerType = parsed.headerType;
+        if (parsed.headerText) template.headerText = parsed.headerText;
+        if (parsed.headerMediaUrl) template.headerMediaUrl = parsed.headerMediaUrl;
+        if (parsed.footerText) template.footerText = parsed.footerText;
+        if (parsed.buttons.length > 0) template.buttons = parsed.buttons;
+        if (parsed.variables.length > 0) template.variables = parsed.variables;
+
+        await WhatsAppTemplate.updateOne(
+          { _id: template._id },
+          {
+            $set: {
+              bodyText: parsed.bodyText,
+              headerType: parsed.headerType,
+              headerText: parsed.headerText,
+              headerMediaUrl: parsed.headerMediaUrl,
+              footerText: parsed.footerText,
+              buttons: parsed.buttons,
+              variables: parsed.variables,
+            },
+          }
+        );
+      }
     }
 
     return successResponse(res, template);
@@ -653,11 +801,20 @@ export const syncTemplatesFromMeta = async (req, res) => {
         rejection = parseRejectionDetails(t.rejected_reason || t.rejection_reason, t.category);
       }
 
+      const parsedComp = parseMetaComponents(t.components || []);
+
       const updatePayload = {
         templateId: t.id,
         metaTemplateId: t.id,
         category: (t.category || 'UTILITY').toUpperCase(),
         status: rawStatus,
+        headerType: parsedComp.headerType,
+        headerText: parsedComp.headerText,
+        headerMediaUrl: parsedComp.headerMediaUrl,
+        bodyText: parsedComp.bodyText,
+        footerText: parsedComp.footerText,
+        buttons: parsedComp.buttons,
+        variables: parsedComp.variables,
         components: t.components || [],
         rejection,
         syncedAt: new Date(),

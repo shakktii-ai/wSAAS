@@ -91,13 +91,23 @@ function minDatetimeLocal() {
   return d.toISOString().slice(0, 16);
 }
 
+function getTemplateBodyText(template) {
+  if (!template) return '';
+  if (template.bodyText && template.bodyText.trim()) return template.bodyText;
+  if (Array.isArray(template.components)) {
+    const bodyComp = template.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+    if (bodyComp?.text) return bodyComp.text;
+  }
+  return '';
+}
+
 /**
  * Parse a template to extract parameter placeholders {{1}}, {{2}}, etc.
  */
 function parseTemplateVariables(template) {
   if (!template) return [];
 
-  const bodyText = template.bodyText || '';
+  const bodyText = getTemplateBodyText(template);
   const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
 
   if (!matches || matches.length === 0) {
@@ -696,7 +706,7 @@ export default function BroadcastsManager() {
                 <div>
                   <p className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-1">Template Body Preview</p>
                   <p className="text-slate-300 text-[11px] leading-relaxed whitespace-pre-wrap">
-                    {selectedTemplate.bodyText || <span className="italic text-slate-600">No body text</span>}
+                    {getTemplateBodyText(selectedTemplate) || <span className="italic text-slate-600">No body text</span>}
                   </p>
                 </div>
 

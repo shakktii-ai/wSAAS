@@ -257,13 +257,25 @@ export default function TemplateManagerPage() {
     );
   };
 
+  const getTemplateBodyText = (tpl) => {
+    if (!tpl) return '';
+    if (tpl.bodyText && tpl.bodyText.trim()) return tpl.bodyText;
+    if (Array.isArray(tpl.components)) {
+      const bodyComp = tpl.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+      if (bodyComp?.text) return bodyComp.text;
+    }
+    return '';
+  };
+
   // Variable replacement preview function
   const renderPreviewBodyText = (text, vars) => {
     let result = text || '';
     if (vars && Array.isArray(vars)) {
-      vars.forEach(v => {
-        const regex = new RegExp(`\\{\\{${v.index}\\}\\}`, 'g');
-        result = result.replace(regex, v.sampleValue || `{{${v.index}}}`);
+      vars.forEach((v, idx) => {
+        const varIndex = typeof v === 'object' ? (v.index || idx + 1) : idx + 1;
+        const sampleVal = typeof v === 'object' ? (v.sampleValue || `Sample_${varIndex}`) : String(v);
+        const regex = new RegExp(`\\{\\{${varIndex}\\}\\}`, 'g');
+        result = result.replace(regex, sampleVal);
       });
     }
     return result;
@@ -447,7 +459,7 @@ export default function TemplateManagerPage() {
                             [{tpl.headerType}] {tpl.headerText}
                           </div>
                         )}
-                        <div>{tpl.bodyText || '[Body Content]'}</div>
+                        <div>{getTemplateBodyText(tpl) || <span className="italic text-slate-400">No body text</span>}</div>
                         {tpl.footerText && (
                           <div className="text-[10px] text-slate-500 mt-1.5 pt-1 border-t border-slate-200">
                             {tpl.footerText}
@@ -1023,7 +1035,7 @@ export default function TemplateManagerPage() {
                     )}
 
                     <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
-                      {renderPreviewBodyText(previewTemplate.bodyText, previewTemplate.variables)}
+                      {renderPreviewBodyText(getTemplateBodyText(previewTemplate), previewTemplate.variables)}
                     </div>
 
                     {previewTemplate.footerText && (

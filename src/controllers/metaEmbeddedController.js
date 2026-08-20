@@ -2,6 +2,7 @@ import axios from 'axios';
 import connectDB from '@/lib/db';
 import Company from '@/models/Company';
 import WhatsAppTemplate from '@/models/WhatsAppTemplate';
+import { parseMetaComponents } from './templateController';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 const META_API_VERSION = process.env.META_API_VERSION || 'v20.0';
@@ -428,18 +429,23 @@ export const getTemplates = async (req, res) => {
 
         if (templatesRes.data?.data) {
           for (const metaTpl of templatesRes.data.data) {
-            const bodyComponent = metaTpl.components?.find((c) => c.type === 'BODY');
-            const bodyText = bodyComponent?.text || '';
+            const parsedComp = parseMetaComponents(metaTpl.components || []);
 
             await WhatsAppTemplate.findOneAndUpdate(
               { companyId, name: metaTpl.name, language: metaTpl.language },
               {
                 companyId,
                 name: metaTpl.name,
-                category: metaTpl.category || 'UTILITY',
+                category: (metaTpl.category || 'UTILITY').toUpperCase(),
                 language: metaTpl.language || 'en_US',
                 components: metaTpl.components || [],
-                body: bodyText,
+                headerType: parsedComp.headerType,
+                headerText: parsedComp.headerText,
+                headerMediaUrl: parsedComp.headerMediaUrl,
+                bodyText: parsedComp.bodyText,
+                footerText: parsedComp.footerText,
+                buttons: parsedComp.buttons,
+                variables: parsedComp.variables,
                 status: (metaTpl.status || 'APPROVED').toUpperCase(),
                 templateId: metaTpl.id,
                 syncedAt: new Date(),
