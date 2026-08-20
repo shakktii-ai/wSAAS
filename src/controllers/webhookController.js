@@ -4,6 +4,9 @@ import Conversation from '@/models/Conversation';
 import Contact from '@/models/Contact';
 import Message from '@/models/Message';
 import WebhookLog from '@/models/WebhookLog';
+import Broadcast from '@/models/Broadcast';
+import CampaignRecipient from '@/models/CampaignRecipient';
+import CampaignButtonClick from '@/models/CampaignButtonClick';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 import { triggerAutomationEngine } from '@/lib/automationEngine';
 import { socketService } from '@/lib/socketService';
@@ -125,6 +128,51 @@ export const handleWebhookEvent = async (req, res) => {
         if (updatedMsg && company) {
           socketService.broadcastToCompany(company._id.toString(), 'MESSAGE_SENT', updatedMsg);
           socketService.broadcastToCompany(company._id.toString(), 'NEW_MESSAGE_RECEIVED', updatedMsg);
+        }
+
+        // ─── Track Campaign Message Statuses (Sent, Delivered, Read, Failed) ─
+        try {
+          const recipient = await CampaignRecipient.findOne({
+            $or: [{ metaMessageId }, { trackingId: metaMessageId }],
+          });
+
+          if (recipient) {
+            const now = new Date();
+            recipient.status = status;
+            if (status === 'read') recipient.readAt = recipient.readAt || now;
+            if (status === 'delivered') recipient.deliveredAt = recipient.deliveredAt || now;
+            if (status === 'failed' && statusObj.errors?.[0]?.title) {
+              recipient.errorMessage = statusObj.errors[0].title;
+            }
+            await recipient.save();
+
+            const broadcastId = recipient.broadcastId;
+            const broadcast = await Broadcast.findById(broadcastId);
+
+            if (broadcast) {
+              const [sentCount, deliveredCount, readCount, failedCount] = await Promise.all([
+                CampaignRecipient.countDocuments({ broadcastId, status: { $in: ['sent', 'delivered', 'read'] } }),
+                CampaignRecipient.countDocuments({ broadcastId, status: { $in: ['delivered', 'read'] } }),
+                CampaignRecipient.countDocuments({ broadcastId, status: 'read' }),
+                CampaignRecipient.countDocuments({ broadcastId, status: 'failed' }),
+              ]);
+
+              broadcast.stats.delivered = deliveredCount;
+              broadcast.stats.read = readCount;
+              broadcast.stats.failed = failedCount;
+
+              const totalSent = broadcast.stats.sent || sentCount || 1;
+              broadcast.rates.deliveryRate = Math.round((deliveredCount / totalSent) * 100);
+              broadcast.rates.readRate = Math.round((readCount / totalSent) * 100);
+
+              await broadcast.save();
+
+              socketService.broadcastToCompany(company._id.toString(), 'CAMPAIGN_UPDATED', broadcast);
+              console.log(`[Webhook Status Tracked] CampaignRecipient ${recipient._id} (msg: ${metaMessageId}) → status=${status}. Broadcast ${broadcastId} stats: read=${readCount}, delivered=${deliveredCount}, readRate=${broadcast.rates.readRate}%`);
+            }
+          }
+        } catch (bcastErr) {
+          console.error('[Webhook Status Broadcast Error]:', bcastErr.message);
         }
       }
 
@@ -363,6 +411,80 @@ export const handleWebhookEvent = async (req, res) => {
           conversation.lastMessageAt = new Date();
           conversation.unreadCount = (conversation.unreadCount || 0) + 1;
           await conversation.save();
+
+          // ─── Track Quick Reply / Interactive Button Clicks ────────────────
+          const isButtonEvent = messageType === 'button' || messageType === 'interactive' || !!buttonPayloadId;
+          const contextWamid = incomingMsg.context?.id || '';
+
+          if (isButtonEvent || contextWamid) {
+            try {
+              const buttonText = messageBody || buttonPayloadId || 'Button Clicked';
+
+              let recipient = null;
+              if (contextWamid) {
+                recipient = await CampaignRecipient.findOne({ metaMessageId: contextWamid });
+              }
+              if (!recipient && contact?._id) {
+                recipient = await CampaignRecipient.findOne({
+                  companyId: company._id,
+                  contactId: contact._id,
+                }).sort({ createdAt: -1 });
+              }
+
+              if (recipient) {
+                const broadcastId = recipient.broadcastId;
+
+                await CampaignButtonClick.create({
+                  companyId: company._id,
+                  broadcastId,
+                  contactId: contact?._id || recipient.contactId,
+                  phone: customerPhone || recipient.phone,
+                  buttonText,
+                  buttonPayload: buttonPayloadId,
+                  metaMessageId: contextWamid,
+                  clickedAt: new Date(),
+                });
+
+                recipient.buttonClicked = true;
+                recipient.buttonResponse = buttonText;
+                recipient.buttonClickedAt = new Date();
+                await recipient.save();
+
+                const allClicks = await CampaignButtonClick.find({ broadcastId });
+                const totalClicks = allClicks.length;
+
+                let acceptCount = 0;
+                let declineCount = 0;
+                const breakdown = {};
+
+                for (const click of allClicks) {
+                  const txt = click.buttonText || 'Clicked';
+                  breakdown[txt] = (breakdown[txt] || 0) + 1;
+
+                  const lower = txt.toLowerCase();
+                  if (lower.includes('accept')) {
+                    acceptCount++;
+                  } else if (lower.includes('decline') || lower.includes('reject')) {
+                    declineCount++;
+                  }
+                }
+
+                const broadcast = await Broadcast.findById(broadcastId);
+                if (broadcast) {
+                  broadcast.stats.buttonClicks = totalClicks;
+                  broadcast.stats.acceptCount = acceptCount;
+                  broadcast.stats.declineCount = declineCount;
+                  broadcast.stats.buttonBreakdown = breakdown;
+                  await broadcast.save();
+
+                  socketService.broadcastToCompany(company._id.toString(), 'CAMPAIGN_UPDATED', broadcast);
+                  console.log(`[Webhook Button Click Tracked] Broadcast ${broadcastId}: buttonText="${buttonText}", acceptCount=${acceptCount}, declineCount=${declineCount}, totalButtonClicks=${totalClicks}`);
+                }
+              }
+            } catch (btnErr) {
+              console.error('[Webhook Button Click Error]:', btnErr.message);
+            }
+          }
 
           logWhatsAppTrace({
             traceId,

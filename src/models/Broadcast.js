@@ -89,6 +89,11 @@ const BroadcastSchema = new mongoose.Schema(
       totalClicks:  { type: Number, default: 0 },
       /** Incremented only on first click per unique contact/IP in this campaign */
       uniqueClicks: { type: Number, default: 0 },
+      /** Quick Reply button responses tracking */
+      buttonClicks:    { type: Number, default: 0 },
+      acceptCount:     { type: Number, default: 0 },
+      declineCount:    { type: Number, default: 0 },
+      buttonBreakdown: { type: Map, of: Number, default: {} },
     },
     rates: {
       deliveryRate: { type: Number, default: 0 },

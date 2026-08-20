@@ -52,6 +52,20 @@ const CampaignRecipientSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // ── Quick Reply button tracking fields ──────────────────────────────────
+    buttonClicked: {
+      type: Boolean,
+      default: false,
+    },
+    buttonResponse: {
+      type: String,
+      default: '',
+    },
+    buttonClickedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -47,7 +47,13 @@ export const getBroadcast = async (req, res) => {
     const recipientMap = {};
     recipients.forEach((r) => { recipientMap[r._id] = r.count; });
 
-    return successResponse(res, { broadcast, recipientSummary: recipientMap });
+    // Attach button click responses
+    const buttonResponses = await CampaignRecipient.find({
+      broadcastId: broadcast._id,
+      buttonClicked: true,
+    }).select('phone buttonResponse buttonClickedAt contactId');
+
+    return successResponse(res, { broadcast, recipientSummary: recipientMap, buttonResponses });
   } catch (error) {
     console.error('getBroadcast Error:', error);
     return errorResponse(res, 'Failed to fetch broadcast', 500);
