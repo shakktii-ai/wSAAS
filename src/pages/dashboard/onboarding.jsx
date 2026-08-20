@@ -54,16 +54,18 @@ export default function SaaSOnboardingWizard() {
       exchangeStarted: isExchangingRef.current,
     });
 
-    if (code && wabaId && !isExchangingRef.current) {
+    if (code && !isExchangingRef.current) {
       if (embeddedTimeoutRef.current) {
         clearTimeout(embeddedTimeoutRef.current);
         embeddedTimeoutRef.current = null;
       }
       isExchangingRef.current = true;
+      const payloadWabaId = embeddedSessionRef.current?.wabaId || wabaId || null;
+      const payloadPhoneId = embeddedSessionRef.current?.phoneNumberId || phoneNumberId || null;
       completeExchange({
         code,
-        wabaId,
-        phoneNumberId: phoneNumberId || null,
+        wabaId: payloadWabaId,
+        phoneNumberId: payloadPhoneId,
       });
     }
   };
@@ -109,18 +111,29 @@ export default function SaaSOnboardingWizard() {
             origin: event.origin,
             messageType: data.type,
             event: data.event || 'UNKNOWN',
-            hasWabaId: Boolean(data.data?.waba_id),
-            hasPhoneNumberId: Boolean(data.data?.phone_number_id),
+            hasWabaId: Boolean(data.data?.waba_id || data.data?.wabaId || data.data?.id),
+            hasPhoneNumberId: Boolean(data.data?.phone_number_id || data.data?.phoneNumberId),
             version: data.data?.version || 'UNKNOWN',
           });
 
-          if (data.event === 'FINISH') {
-            const { waba_id, phone_number_id } = data.data || {};
-            embeddedSessionRef.current = { wabaId: waba_id, phoneNumberId: phone_number_id };
+          const isFinishEvent =
+            data.event === 'FINISH' ||
+            data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' ||
+            (typeof data.event === 'string' && data.event.includes('FINISH'));
+
+          if (isFinishEvent) {
+            const waba_id = data.data?.waba_id || data.data?.wabaId || data.data?.id;
+            const phone_number_id = data.data?.phone_number_id || data.data?.phoneNumberId;
+            if (waba_id || phone_number_id) {
+              embeddedSessionRef.current = {
+                wabaId: waba_id || embeddedSessionRef.current?.wabaId || null,
+                phoneNumberId: phone_number_id || embeddedSessionRef.current?.phoneNumberId || null,
+              };
+            }
             console.log('[META_EMBEDDED_SIGNUP_FINISH]', {
-              event: 'FINISH',
-              hasWabaId: Boolean(waba_id),
-              hasPhoneNumberId: Boolean(phone_number_id),
+              event: data.event,
+              hasWabaId: Boolean(embeddedSessionRef.current?.wabaId),
+              hasPhoneNumberId: Boolean(embeddedSessionRef.current?.phoneNumberId),
             });
             if (embeddedTimeoutRef.current) {
               clearTimeout(embeddedTimeoutRef.current);
