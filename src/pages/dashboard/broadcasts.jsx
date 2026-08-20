@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -20,36 +20,133 @@ import {
   TrendingUp,
   Activity,
   Layers,
+  XCircle,
+  MousePointerClick,
+  CalendarDays,
+  Zap,
+  Ban,
+  RotateCcw,
 } from 'lucide-react';
 
-export default function BroadcastsManager() {
-  const [broadcasts, setBroadcasts] = useState([]);
-  const [summary, setSummary] = useState({ totalCampaigns: 0, completedCount: 0, scheduledCount: 0, totalSent: 0 });
-  const [templates, setTemplates] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ─── Status config ──────────────────────────────────────────────────────────
 
-  // Create Campaign Modal State
+const STATUS_CONFIG = {
+  COMPLETED: {
+    label: 'Completed',
+    className: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    icon: CheckCircle2,
+  },
+  PROCESSING: {
+    label: 'Processing',
+    className: 'bg-blue-100 text-blue-800 border-blue-200 animate-pulse',
+    icon: Activity,
+  },
+  SCHEDULED: {
+    label: 'Scheduled',
+    className: 'bg-amber-100 text-amber-800 border-amber-200',
+    icon: Clock,
+  },
+  PAUSED: {
+    label: 'Paused',
+    className: 'bg-rose-100 text-rose-800 border-rose-200',
+    icon: Pause,
+  },
+  DRAFT: {
+    label: 'Draft',
+    className: 'bg-slate-100 text-slate-700 border-slate-200',
+    icon: Layers,
+  },
+  FAILED: {
+    label: 'Failed',
+    className: 'bg-red-100 text-red-800 border-red-200',
+    icon: AlertCircle,
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    className: 'bg-slate-200 text-slate-500 border-slate-300',
+    icon: Ban,
+  },
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatScheduledAt(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/** Minimum datetime-local value = now + 2 minutes */
+function minDatetimeLocal() {
+  const d = new Date(Date.now() + 2 * 60 * 1000);
+  d.setSeconds(0, 0);
+  return d.toISOString().slice(0, 16);
+}
+
+// ─── Stat card ───────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, color = 'slate' }) {
+  const colors = {
+    slate:  'bg-slate-950 border-slate-800 text-slate-300',
+    emerald:'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+    sky:    'bg-sky-500/10 border-sky-500/20 text-sky-400',
+    rose:   'bg-rose-500/10 border-rose-500/20 text-rose-400',
+    amber:  'bg-amber-500/10 border-amber-500/20 text-amber-400',
+    purple: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
+    teal:   'bg-teal-500/10 border-teal-500/20 text-teal-400',
+  };
+  return (
+    <div className={`p-3 rounded-xl border text-center ${colors[color]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
+      <p className="text-lg font-bold mt-1">{value}</p>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function BroadcastsManager() {
+  const [broadcasts, setBroadcasts]     = useState([]);
+  const [summary, setSummary]           = useState({ totalCampaigns: 0, completedCount: 0, scheduledCount: 0, totalSent: 0 });
+  const [templates, setTemplates]       = useState([]);
+  const [loading, setLoading]           = useState(true);
+
+  // ── Create Campaign Modal ────────────────────────────────────────────────
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName]                 = useState('');
+  const [description, setDescription]  = useState('');
   const [campaignType, setCampaignType] = useState('PROMOTIONAL');
   const [templateName, setTemplateName] = useState('');
-  const [targetType, setTargetType] = useState('all');
-  const [targetValue, setTargetValue] = useState('');
-  const [scheduledAt, setScheduledAt] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [createError, setCreateError] = useState('');
+  const [targetType, setTargetType]     = useState('all');
+  const [targetValue, setTargetValue]   = useState('');
 
-  // Selected Report State
+  /** 'now' | 'later' */
+  const [sendMode, setSendMode]         = useState('now');
+  const [scheduledAt, setScheduledAt]   = useState('');
+
+  const [submitting, setSubmitting]     = useState(false);
+  const [createError, setCreateError]   = useState('');
+
+  // ── Analytics Modal ──────────────────────────────────────────────────────
   const [selectedReport, setSelectedReport] = useState(null);
 
-  const fetchBroadcasts = async () => {
+  // ── Data fetching ────────────────────────────────────────────────────────
+
+  const fetchBroadcasts = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get('/broadcasts');
       if (res.success && res.data) {
         const list = res.data.broadcasts || res.data;
-        setBroadcasts(list);
+        setBroadcasts(Array.isArray(list) ? list : []);
         if (res.data.summary) setSummary(res.data.summary);
       }
     } catch (err) {
@@ -57,48 +154,100 @@ export default function BroadcastsManager() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async () => {
     try {
       const res = await api.get('/templates?status=APPROVED');
       if (res.success && res.data) {
         const approvedOnly = res.data.filter((t) => t.status === 'APPROVED');
         setTemplates(approvedOnly);
-        if (approvedOnly.length > 0) {
-          setTemplateName(approvedOnly[0].name);
-        }
+        if (approvedOnly.length > 0) setTemplateName(approvedOnly[0].name);
       }
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBroadcasts();
     fetchTemplates();
-  }, []);
+  }, [fetchBroadcasts, fetchTemplates]);
+
+  // ── Create ───────────────────────────────────────────────────────────────
+
+  const resetCreateForm = () => {
+    setName('');
+    setDescription('');
+    setCampaignType('PROMOTIONAL');
+    setTemplateName(templates[0]?.name || '');
+    setTargetType('all');
+    setTargetValue('');
+    setSendMode('now');
+    setScheduledAt('');
+    setCreateError('');
+  };
 
   const handleCreateBroadcast = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setCreateError('');
 
+    // Client-side validation for Schedule Later
+    if (sendMode === 'later') {
+      if (!scheduledAt) {
+        setCreateError('Please select a scheduled date and time.');
+        setSubmitting(false);
+        return;
+      }
+      if (new Date(scheduledAt) <= new Date()) {
+        setCreateError('Scheduled time must be in the future. Pick a date/time at least 1 minute ahead.');
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
-      const res = await api.post('/broadcasts', {
+      const payload = {
         name,
         description,
         campaignType,
         templateName,
         targetType,
         targetValue,
-        scheduledAt,
-      });
+        // For 'now': sendNow flag tells server to keep as DRAFT so we execute immediately
+        sendNow: sendMode === 'now',
+        scheduledAt: sendMode === 'later' ? scheduledAt : undefined,
+      };
 
-      if (res.success) {
+      const createRes = await api.post('/broadcasts', payload);
+      if (!createRes.success) {
+        setCreateError(createRes.message || 'Failed to create campaign');
+        return;
+      }
+
+      const newBroadcast = createRes.data;
+
+      if (sendMode === 'now') {
+        // Immediately dispatch the newly created campaign
+        try {
+          const execRes = await api.post(`/broadcasts/${newBroadcast._id}/execute`);
+          if (execRes.success) {
+            setIsCreateOpen(false);
+            resetCreateForm();
+            fetchBroadcasts();
+          } else {
+            setCreateError(execRes.message || 'Campaign created but dispatch failed.');
+            fetchBroadcasts(); // Still refresh so user sees the DRAFT
+          }
+        } catch (execErr) {
+          setCreateError(execErr.message || 'Campaign created but dispatch failed.');
+          fetchBroadcasts();
+        }
+      } else {
+        // Schedule Later — campaign is SCHEDULED, cron will pick it up
         setIsCreateOpen(false);
-        setName('');
-        setDescription('');
+        resetCreateForm();
         fetchBroadcasts();
       }
     } catch (err) {
@@ -107,6 +256,8 @@ export default function BroadcastsManager() {
       setSubmitting(false);
     }
   };
+
+  // ── Actions ──────────────────────────────────────────────────────────────
 
   const handleExecuteBroadcast = async (id) => {
     if (!confirm('Dispatch broadcast campaign to target WhatsApp contacts now?')) return;
@@ -118,6 +269,16 @@ export default function BroadcastsManager() {
       }
     } catch (err) {
       alert(err.message || 'Broadcast execution failed');
+    }
+  };
+
+  const handleCancelBroadcast = async (id, name) => {
+    if (!confirm(`Cancel scheduled campaign "${name}"? This cannot be undone.`)) return;
+    try {
+      const res = await api.post(`/broadcasts/${id}/cancel`);
+      if (res.success) fetchBroadcasts();
+    } catch (err) {
+      alert(err.message || 'Failed to cancel campaign');
     }
   };
 
@@ -149,7 +310,7 @@ export default function BroadcastsManager() {
   };
 
   const handleDeleteBroadcast = async (id) => {
-    if (!confirm('Delete campaign and historical logs?')) return;
+    if (!confirm('Delete campaign and all historical logs? This cannot be undone.')) return;
     try {
       const res = await api.delete(`/broadcasts/${id}`);
       if (res.success) fetchBroadcasts();
@@ -158,41 +319,123 @@ export default function BroadcastsManager() {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const badges = {
-      COMPLETED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      PROCESSING: 'bg-blue-100 text-blue-800 border-blue-200 animate-pulse',
-      SCHEDULED: 'bg-amber-100 text-amber-800 border-amber-200',
-      PAUSED: 'bg-rose-100 text-rose-800 border-rose-200',
-      DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
-    };
+  // ── Status Badge ─────────────────────────────────────────────────────────
 
+  const getStatusBadge = (status) => {
+    const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.DRAFT;
     return (
-      <span className={`px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-full border ${badges[status] || badges.SCHEDULED}`}>
+      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-full border ${cfg.className}`}>
         {status}
       </span>
     );
   };
 
+  // ─── Row Actions ──────────────────────────────────────────────────────────
+
+  const RowActions = ({ b }) => {
+    const canDispatch = ['DRAFT', 'SCHEDULED'].includes(b.status) && !['PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(b.status);
+    const canCancel   = ['DRAFT', 'SCHEDULED'].includes(b.status);
+
+    return (
+      <div className="flex items-center justify-end gap-1">
+        {/* View Report */}
+        <button
+          onClick={() => setSelectedReport(b)}
+          className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-emerald-400 transition-colors"
+          title="View Report"
+        >
+          <BarChart3 className="w-4 h-4" />
+        </button>
+
+        {/* Processing → Pause */}
+        {b.status === 'PROCESSING' && (
+          <button
+            onClick={() => handlePauseBroadcast(b._id)}
+            className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+            title="Pause"
+          >
+            <Pause className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Paused → Resume */}
+        {b.status === 'PAUSED' && (
+          <button
+            onClick={() => handleResumeBroadcast(b._id)}
+            className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+            title="Resume"
+          >
+            <Play className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Draft → Dispatch */}
+        {b.status === 'DRAFT' && (
+          <button
+            onClick={() => handleExecuteBroadcast(b._id)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-[10px] font-bold transition-colors"
+            title="Dispatch Now"
+          >
+            <Zap className="w-3.5 h-3.5" /> Dispatch
+          </button>
+        )}
+
+        {/* Cancel (DRAFT / SCHEDULED) */}
+        {canCancel && (
+          <button
+            onClick={() => handleCancelBroadcast(b._id, b.name)}
+            className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+            title="Cancel Campaign"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Clone */}
+        <button
+          onClick={() => handleCloneBroadcast(b._id)}
+          className="p-1.5 text-slate-400 hover:text-white transition-colors"
+          title="Duplicate"
+        >
+          <Copy className="w-4 h-4" />
+        </button>
+
+        {/* Delete */}
+        {!['PROCESSING'].includes(b.status) && (
+          <button
+            onClick={() => handleDeleteBroadcast(b._id)}
+            className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <Send className="w-6 h-6 text-emerald-600" /> WhatsApp Campaign Manager
             </h1>
             <p className="text-xs text-slate-600 mt-1">
-              Create audience target broadcasts, schedule dispatches, and track conversion rates.
+              Create audience-targeted broadcasts, schedule dispatches, and track link clicks & CTR.
             </p>
           </div>
-          <Button icon={Plus} onClick={() => setIsCreateOpen(true)}>
+          <Button icon={Plus} onClick={() => { resetCreateForm(); setIsCreateOpen(true); }}>
             New Campaign
           </Button>
         </div>
 
-        {/* Campaign Metrics Overview */}
+        {/* ── Metrics Overview ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="flex items-center gap-3 shadow-xs">
             <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
@@ -209,7 +452,7 @@ export default function BroadcastsManager() {
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Completed Dispatches</p>
+              <p className="text-xs text-slate-500 font-medium">Completed</p>
               <h3 className="text-lg font-bold text-slate-900">{summary.completedCount}</h3>
             </div>
           </Card>
@@ -219,7 +462,7 @@ export default function BroadcastsManager() {
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Scheduled Campaigns</p>
+              <p className="text-xs text-slate-500 font-medium">Scheduled / Active</p>
               <h3 className="text-lg font-bold text-slate-900">{summary.scheduledCount}</h3>
             </div>
           </Card>
@@ -229,99 +472,115 @@ export default function BroadcastsManager() {
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Dispatched Messages</p>
+              <p className="text-xs text-slate-500 font-medium">Total Dispatched</p>
               <h3 className="text-lg font-bold text-slate-900">{summary.totalSent}</h3>
             </div>
           </Card>
         </div>
 
-        {/* Campaigns List */}
+        {/* ── Campaign Table ── */}
         <Card title={`Campaign Roster (${broadcasts.length})`} className="shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">Campaign Name</th>
-                  <th className="px-4 py-3">Type & Template</th>
-                  <th className="px-4 py-3">Audience</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Dispatched / Total</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {broadcasts.map((b) => (
-                  <tr key={b._id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-bold text-slate-900 text-xs">{b.name}</p>
-                      <p className="text-[10px] text-slate-500 font-normal">
-                        {new Date(b.createdAt).toLocaleDateString()}
-                      </p>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-emerald-400">{b.templateName}</span>
-                      <span className="block text-[10px] text-slate-500">{b.campaignType || 'PROMOTIONAL'}</span>
-                    </td>
-
-                    <td className="px-4 py-3 text-slate-300">
-                      <span className="capitalize">{b.targetType}</span>
-                      {b.targetValue && <span className="text-slate-500"> ({b.targetValue})</span>}
-                    </td>
-
-                    <td className="px-4 py-3">{getStatusBadge(b.status)}</td>
-
-                    <td className="px-4 py-3 font-mono text-slate-200 font-bold">
-                      {b.stats?.sent || 0} / {b.stats?.total || 0}
-                    </td>
-
-                    <td className="px-4 py-3 text-right space-x-1">
-                      <button
-                        onClick={() => setSelectedReport(b)}
-                        className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-emerald-400"
-                        title="View Report"
-                      >
-                        <BarChart3 className="w-4 h-4" />
-                      </button>
-
-                      {b.status === 'PROCESSING' ? (
-                        <button onClick={() => handlePauseBroadcast(b._id)} className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400" title="Pause">
-                          <Pause className="w-4 h-4" />
-                        </button>
-                      ) : b.status === 'PAUSED' ? (
-                        <button onClick={() => handleResumeBroadcast(b._id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400" title="Resume">
-                          <Play className="w-4 h-4" />
-                        </button>
-                      ) : b.status !== 'COMPLETED' ? (
-                        <Button size="sm" variant="primary" icon={Play} onClick={() => handleExecuteBroadcast(b._id)}>
-                          Dispatch
-                        </Button>
-                      ) : null}
-
-                      <button onClick={() => handleCloneBroadcast(b._id)} className="p-1.5 text-slate-400 hover:text-white" title="Clone">
-                        <Copy className="w-4 h-4" />
-                      </button>
-
-                      <button onClick={() => handleDeleteBroadcast(b._id)} className="p-1.5 text-slate-500 hover:text-rose-400" title="Delete">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
+          {loading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">Loading campaigns…</div>
+          ) : broadcasts.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-sm">
+              No campaigns yet. Create your first broadcast!
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">Campaign</th>
+                    <th className="px-4 py-3">Template</th>
+                    <th className="px-4 py-3">Audience</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Sent / Total</th>
+                    <th className="px-4 py-3">Clicks</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {broadcasts.map((b) => (
+                    <tr key={b._id} className="hover:bg-slate-50 transition-colors">
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-slate-900 text-xs">{b.name}</p>
+                        <p className="text-[10px] text-slate-400 font-normal mt-0.5">
+                          {new Date(b.createdAt).toLocaleDateString('en-IN')}
+                        </p>
+                        {/* Scheduled time indicator */}
+                        {b.status === 'SCHEDULED' && b.scheduledAt && (
+                          <p className="text-[10px] text-amber-600 font-medium mt-0.5 flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3" />
+                            Scheduled for: {formatScheduledAt(b.scheduledAt)}
+                          </p>
+                        )}
+                        {/* Error indicator */}
+                        {b.status === 'FAILED' && b.errorMessage && (
+                          <p className="text-[10px] text-red-500 mt-0.5 truncate max-w-[180px]" title={b.errorMessage}>
+                            ✕ {b.errorMessage}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Template */}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-emerald-400 text-[11px]">{b.templateName}</span>
+                        <span className="block text-[10px] text-slate-400">{b.campaignType || 'PROMOTIONAL'}</span>
+                      </td>
+
+                      {/* Audience */}
+                      <td className="px-4 py-3 text-slate-500">
+                        <span className="capitalize">{b.targetType}</span>
+                        {b.targetValue && <span className="text-slate-400"> ({b.targetValue})</span>}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3">{getStatusBadge(b.status)}</td>
+
+                      {/* Sent / Total */}
+                      <td className="px-4 py-3 font-mono text-slate-400 font-bold text-[11px]">
+                        {b.stats?.sent || 0} / {b.stats?.total || 0}
+                      </td>
+
+                      {/* Clicks */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 text-[11px]">
+                          <MousePointerClick className="w-3.5 h-3.5 text-teal-400" />
+                          <span className="text-teal-400 font-bold">{b.stats?.totalClicks || 0}</span>
+                          <span className="text-slate-500">({b.stats?.uniqueClicks || 0} uniq)</span>
+                        </div>
+                        {(b.rates?.ctr > 0) && (
+                          <div className="text-[10px] text-amber-400 font-mono">
+                            CTR: {b.rates.ctr}%
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <RowActions b={b} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
 
-        {/* Create Broadcast Modal */}
-        <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="New WhatsApp Broadcast Campaign">
+        {/* ── Create Broadcast Modal ── */}
+        <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetCreateForm(); }} title="New WhatsApp Broadcast Campaign">
           {createError && (
             <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> {createError}
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {createError}
             </div>
           )}
 
           <form onSubmit={handleCreateBroadcast} className="space-y-4 text-xs">
+
+            {/* Campaign name */}
             <div>
               <label className="block text-slate-300 font-medium mb-1">Campaign Name *</label>
               <input
@@ -330,32 +589,35 @@ export default function BroadcastsManager() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Festive Sale Offer 2026"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
               />
             </div>
 
+            {/* Type + Template */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Campaign Type</label>
                 <select
                   value={campaignType}
                   onChange={(e) => setCampaignType(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
                 >
                   <option value="PROMOTIONAL">PROMOTIONAL</option>
                   <option value="TRANSACTIONAL">TRANSACTIONAL</option>
                   <option value="REENGAGEMENT">REENGAGEMENT</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Select Meta Template *</label>
+                <label className="block text-slate-300 font-medium mb-1">Meta Template *</label>
                 <select
                   required
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
                 >
+                  {templates.length === 0 && (
+                    <option value="">No approved templates</option>
+                  )}
                   {templates.map((t) => (
                     <option key={t._id} value={t.name}>
                       {t.name} ({t.category})
@@ -365,82 +627,191 @@ export default function BroadcastsManager() {
               </div>
             </div>
 
+            {/* Audience */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Target Audience</label>
                 <select
                   value={targetType}
-                  onChange={(e) => setTargetType(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  onChange={(e) => { setTargetType(e.target.value); setTargetValue(''); }}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
                 >
                   <option value="all">All Contacts</option>
                   <option value="group">Specific Group</option>
                   <option value="tag">Specific Tag</option>
                 </select>
               </div>
-
               {targetType !== 'all' && (
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Tag / Group Name</label>
+                  <label className="block text-slate-300 font-medium mb-1">
+                    {targetType === 'group' ? 'Group Name' : 'Tag Name'}
+                  </label>
                   <input
                     type="text"
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
-                    placeholder="VIP or Leads"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                    placeholder={targetType === 'group' ? 'VIP Customers' : 'leads'}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="secondary" onClick={() => setIsCreateOpen(false)}>
+            {/* ── Send mode selector ── */}
+            <div>
+              <label className="block text-slate-300 font-medium mb-2">When to Send</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSendMode('now');
+                    setScheduledAt('');   // clear schedule date when switching to Send Now
+                    setCreateError('');
+                  }}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                    sendMode === 'now'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  <Zap className="w-4 h-4" /> Send Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSendMode('later');
+                    setCreateError('');
+                    // Auto-fill with the minimum valid datetime (now + 5 min) if blank
+                    if (!scheduledAt) {
+                      const d = new Date(Date.now() + 5 * 60 * 1000);
+                      d.setSeconds(0, 0);
+                      setScheduledAt(d.toISOString().slice(0, 16));
+                    }
+                  }}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                    sendMode === 'later'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  <CalendarDays className="w-4 h-4" /> Schedule Later
+                </button>
+              </div>
+            </div>
+
+            {/* Date-time picker (only when schedule later) */}
+            {sendMode === 'later' && (
+              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <label className="block text-amber-400 font-medium mb-1.5 flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5" /> Schedule Date & Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  required={sendMode === 'later'}
+                  min={minDatetimeLocal()}
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-500 [color-scheme:dark]"
+                />
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  Time is interpreted in your local timezone. The cron scheduler checks every minute.
+                </p>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <Button type="button" variant="secondary" onClick={() => { setIsCreateOpen(false); resetCreateForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" loading={submitting}>
-                Save Broadcast Campaign
+              <Button type="submit" loading={submitting} icon={sendMode === 'now' ? Zap : CalendarDays}>
+                {submitting
+                  ? (sendMode === 'now' ? 'Dispatching…' : 'Scheduling…')
+                  : (sendMode === 'now' ? '⚡ Send Now' : '📅 Schedule Campaign')
+                }
               </Button>
             </div>
           </form>
         </Modal>
 
-        {/* Campaign Report Modal */}
+        {/* ── Analytics Report Modal ── */}
         {selectedReport && (
-          <Modal isOpen={!!selectedReport} onClose={() => setSelectedReport(null)} title={`Analytics Report: ${selectedReport.name}`}>
+          <Modal
+            isOpen={!!selectedReport}
+            onClose={() => setSelectedReport(null)}
+            title={`Analytics: ${selectedReport.name}`}
+          >
             <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-4 gap-3 text-center">
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Target</p>
-                  <p className="text-lg font-bold text-white mt-1">{selectedReport.stats?.total || 0}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <p className="text-[10px] text-emerald-400 font-semibold uppercase">Sent</p>
-                  <p className="text-lg font-bold text-emerald-400 mt-1">{selectedReport.stats?.sent || 0}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20">
-                  <p className="text-[10px] text-sky-400 font-semibold uppercase">Delivered</p>
-                  <p className="text-lg font-bold text-sky-400 mt-1">{selectedReport.stats?.delivered || 0}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                  <p className="text-[10px] text-rose-400 font-semibold uppercase">Failed</p>
-                  <p className="text-lg font-bold text-rose-400 mt-1">{selectedReport.stats?.failed || 0}</p>
+
+              {/* Campaign meta */}
+              <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                {getStatusBadge(selectedReport.status)}
+                <span className="font-mono">{selectedReport.templateName}</span>
+                {selectedReport.status === 'SCHEDULED' && selectedReport.scheduledAt && (
+                  <span className="text-amber-400 flex items-center gap-1">
+                    <CalendarDays className="w-3 h-3" />
+                    {formatScheduledAt(selectedReport.scheduledAt)}
+                  </span>
+                )}
+                {selectedReport.status === 'FAILED' && selectedReport.errorMessage && (
+                  <span className="text-red-400 truncate max-w-xs" title={selectedReport.errorMessage}>
+                    {selectedReport.errorMessage}
+                  </span>
+                )}
+              </div>
+
+              {/* ── Row 1: Delivery stats ── */}
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-2 tracking-wide">Message Delivery</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <StatCard label="Total" value={selectedReport.stats?.total || 0} color="slate" />
+                  <StatCard label="Sent" value={selectedReport.stats?.sent || 0} color="emerald" />
+                  <StatCard label="Delivered" value={selectedReport.stats?.delivered || 0} color="sky" />
+                  <StatCard label="Failed" value={selectedReport.stats?.failed || 0} color="rose" />
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-3 gap-2 text-center font-mono">
-                <div>
-                  <span className="block text-[10px] text-slate-400">Delivery Rate</span>
-                  <span className="text-emerald-400 font-bold">{selectedReport.rates?.deliveryRate || 100}%</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] text-slate-400">Read Rate</span>
-                  <span className="text-sky-400 font-bold">{selectedReport.rates?.readRate || 75}%</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] text-slate-400 font-bold">CTR</span>
-                  <span className="text-amber-400 font-bold">{selectedReport.rates?.ctr || 18}%</span>
+              {/* ── Row 2: Engagement stats ── */}
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-semibold mb-2 tracking-wide">Engagement</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <StatCard label="Read" value={selectedReport.stats?.read || 0} color="purple" />
+                  <StatCard label="Total Clicks" value={selectedReport.stats?.totalClicks || 0} color="teal" />
+                  <StatCard label="Unique Clicks" value={selectedReport.stats?.uniqueClicks || 0} color="teal" />
                 </div>
               </div>
+
+              {/* ── Row 3: Rates ── */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-3 gap-2 text-center font-mono">
+                <div>
+                  <span className="block text-[10px] text-slate-400 mb-1">Delivery Rate</span>
+                  <span className="text-emerald-400 font-bold text-sm">
+                    {selectedReport.rates?.deliveryRate || 0}%
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-slate-400 mb-1">Read Rate</span>
+                  <span className="text-purple-400 font-bold text-sm">
+                    {selectedReport.rates?.readRate || 0}%
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-slate-400 mb-1">
+                    CTR
+                    <span className="ml-1 text-slate-600 font-normal not-italic">(unique/sent)</span>
+                  </span>
+                  <span className="text-amber-400 font-bold text-sm">
+                    {selectedReport.rates?.ctr || 0}%
+                  </span>
+                </div>
+              </div>
+
+              {/* CTR formula note */}
+              <p className="text-[10px] text-slate-500 bg-slate-900 rounded-lg px-3 py-2 border border-slate-800">
+                <strong className="text-slate-400">CTR formula:</strong> Unique Clicks ÷ Messages Sent × 100.
+                A click is <em>unique</em> per contact per campaign (or per IP fingerprint for anonymous users).
+                Tracking URLs are embedded in broadcast messages automatically.
+              </p>
 
               <div className="flex justify-end pt-2">
                 <Button variant="secondary" onClick={() => setSelectedReport(null)}>
@@ -450,6 +821,7 @@ export default function BroadcastsManager() {
             </div>
           </Modal>
         )}
+
       </div>
     </DashboardLayout>
   );
