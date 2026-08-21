@@ -420,6 +420,9 @@ export const createNewTemplate = async (req, res) => {
       if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
         try {
           const mediaHandle = await createMetaHeaderHandle({
+            company,
+            appId: company?.whatsappConfig?.appId,
+            phoneNumberId: company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId,
             wabaId,
             accessToken,
             mediaUrl: headerMediaUrl,
@@ -631,6 +634,9 @@ export const updateTemplate = async (req, res) => {
       if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
         try {
           const mediaHandle = await createMetaHeaderHandle({
+            company,
+            appId: company?.whatsappConfig?.appId,
+            phoneNumberId: company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId,
             wabaId,
             accessToken,
             mediaUrl: headerMediaUrl,
@@ -710,6 +716,9 @@ export const submitTemplateToMeta = async (req, res) => {
     if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(template.headerType)) {
       try {
         const mediaHandle = await createMetaHeaderHandle({
+          company,
+          appId: company?.whatsappConfig?.appId,
+          phoneNumberId: company?.phoneNumberId || company?.whatsappConfig?.phoneNumberId,
           wabaId,
           accessToken,
           mediaUrl: template.headerMediaUrl,

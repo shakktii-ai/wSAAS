@@ -282,12 +282,59 @@ export async function fetchMetaTemplates({ wabaId, accessToken }) {
 }
 
 /**
- * Uploads a media file (or default fallback sample image) to Meta's Resumable Upload API
- * to generate a valid `header_handle` (h-id) required for template creation with IMAGE/VIDEO/DOCUMENT headers.
+ * Uploads a media file (or default fallback sample image) to Meta's Resumable Upload API (App ID)
+ * or WhatsApp Cloud Media API (Phone Number ID) to generate a valid `header_handle` required for template creation with IMAGE/VIDEO/DOCUMENT headers.
  */
-export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, headerType = 'IMAGE' }) {
-  if (!wabaId || !accessToken) {
-    throw new Error('WABA ID and Access Token are required to upload template media handle');
+export async function createMetaHeaderHandle({
+  appId,
+  phoneNumberId,
+  wabaId,
+  accessToken,
+  mediaUrl,
+  headerType = 'IMAGE',
+  company,
+}) {
+  const resolvedAppId =
+    appId ||
+    company?.whatsappConfig?.appId ||
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    process.env.FACEBOOK_CLIENT_ID ||
+    process.env.META_APP_ID ||
+    '';
+
+  const resolvedPhoneNumberId =
+    phoneNumberId ||
+    company?.phoneNumberId ||
+    company?.whatsappConfig?.phoneNumberId ||
+    process.env.META_PHONE_NUMBER_ID ||
+    '';
+
+  const resolvedWabaId =
+    wabaId ||
+    company?.wabaId ||
+    company?.whatsappConfig?.wabaId ||
+    process.env.META_WABA_ID ||
+    '';
+
+  const resolvedToken =
+    accessToken ||
+    company?.whatsappConfig?.accessToken ||
+    company?.metaAccessToken ||
+    process.env.META_ACCESS_TOKEN ||
+    '';
+
+  console.log('[META_HEADER_UPLOAD_TRACE]', {
+    stage: 'START_HEADER_UPLOAD',
+    appIdPresent: Boolean(resolvedAppId),
+    phoneNumberIdPresent: Boolean(resolvedPhoneNumberId),
+    wabaIdPresent: Boolean(resolvedWabaId),
+    tokenPresent: Boolean(resolvedToken),
+    headerType,
+    mediaUrl: mediaUrl || 'none',
+  });
+
+  if (!resolvedToken) {
+    throw new Error('Meta Access Token missing for media upload');
   }
 
   let mediaBuffer;
@@ -302,7 +349,7 @@ export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, he
     fileName = 'sample.pdf';
   }
 
-  // 1. Try downloading media buffer from user-provided mediaUrl
+  // 1. Download media buffer from user-provided mediaUrl
   if (mediaUrl && typeof mediaUrl === 'string' && mediaUrl.startsWith('http')) {
     try {
       const response = await axios.get(mediaUrl, {
@@ -321,7 +368,7 @@ export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, he
         }
       }
     } catch (err) {
-      console.warn('[MetaMediaHandle] Failed to fetch user mediaUrl, generating fallback sample:', err.message);
+      console.warn('[META_HEADER_UPLOAD_TRACE] Failed to fetch mediaUrl, using sample pixel fallback:', err.message);
     }
   }
 
@@ -333,45 +380,97 @@ export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, he
     fileName = 'sample.png';
   }
 
-  // 3. Initiate Resumable Upload Session on Meta Graph API with required file_name parameter
-  const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${wabaId}/uploads?file_name=${encodeURIComponent(fileName)}&file_length=${mediaBuffer.length}&file_type=${encodeURIComponent(mimeType)}`;
+  // METHOD A: Meta Resumable Upload API using App ID (or WABA ID fallback)
+  const targetUploadId = resolvedAppId || resolvedWabaId;
+  if (targetUploadId) {
+    try {
+      console.log('[META_HEADER_UPLOAD_TRACE]', {
+        stage: 'INITIATING_RESUMABLE_SESSION',
+        targetUploadId,
+        fileName,
+        fileLength: mediaBuffer.length,
+        mimeType,
+      });
 
-  try {
-    const sessionRes = await axios.post(sessionUrl, null, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      timeout: 10000,
-    });
+      const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${targetUploadId}/uploads?file_name=${encodeURIComponent(fileName)}&file_length=${mediaBuffer.length}&file_type=${encodeURIComponent(mimeType)}`;
 
-    const uploadSessionId = sessionRes.data?.id;
-    if (!uploadSessionId) {
-      throw new Error('Meta did not return a valid upload session ID');
+      const sessionRes = await axios.post(sessionUrl, null, {
+        headers: {
+          Authorization: `Bearer ${resolvedToken}`,
+        },
+        timeout: 10000,
+      });
+
+      const uploadSessionId = sessionRes.data?.id;
+      if (uploadSessionId) {
+        const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`;
+        const uploadRes = await axios.post(uploadUrl, mediaBuffer, {
+          headers: {
+            Authorization: `OAuth ${resolvedToken}`,
+            file_offset: '0',
+            'Content-Type': 'application/octet-stream',
+          },
+          timeout: 15000,
+        });
+
+        const handle = uploadRes.data?.h;
+        if (handle) {
+          console.log('[META_HEADER_UPLOAD_TRACE]', {
+            stage: 'RESUMABLE_UPLOAD_SUCCESS',
+            handleLength: handle.length,
+          });
+          return handle;
+        }
+      }
+    } catch (resumableErr) {
+      const errDetail = resumableErr.response?.data?.error || { message: resumableErr.message };
+      console.warn('[META_HEADER_UPLOAD_TRACE] Resumable upload attempt failed, trying WhatsApp Cloud Media API:', errDetail);
     }
-
-    // 4. Upload binary payload to the session ID
-    const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`;
-
-    const uploadRes = await axios.post(uploadUrl, mediaBuffer, {
-      headers: {
-        Authorization: `OAuth ${accessToken}`,
-        file_offset: '0',
-        'Content-Type': 'application/octet-stream',
-      },
-      timeout: 15000,
-    });
-
-    const handle = uploadRes.data?.h;
-    if (!handle) {
-      throw new Error('Meta did not return a valid media handle (h)');
-    }
-
-    return handle;
-  } catch (err) {
-    const metaErrMsg = err.response?.data?.error?.message || err.message;
-    console.error('[MetaMediaHandle] Upload session error:', metaErrMsg);
-    throw new Error(`Failed to upload template media handle to Meta: ${metaErrMsg}`);
   }
+
+  // METHOD B: WhatsApp Cloud Media API Endpoint using Phone Number ID
+  if (resolvedPhoneNumberId) {
+    try {
+      console.log('[META_HEADER_UPLOAD_TRACE]', {
+        stage: 'INITIATING_PHONE_MEDIA_UPLOAD',
+        phoneNumberId: resolvedPhoneNumberId,
+        mimeType,
+      });
+
+      const FormData = (await import('form-data')).default;
+      const form = new FormData();
+      form.append('messaging_product', 'whatsapp');
+      form.append('file', mediaBuffer, {
+        filename: fileName,
+        contentType: mimeType,
+      });
+
+      const mediaUrlEndpoint = `https://graph.facebook.com/${META_API_VERSION}/${resolvedPhoneNumberId}/media`;
+      const mediaRes = await axios.post(mediaUrlEndpoint, form, {
+        headers: {
+          Authorization: `Bearer ${resolvedToken}`,
+          ...form.getHeaders(),
+        },
+        timeout: 15000,
+      });
+
+      const mediaId = mediaRes.data?.id;
+      if (mediaId) {
+        console.log('[META_HEADER_UPLOAD_TRACE]', {
+          stage: 'PHONE_MEDIA_UPLOAD_SUCCESS',
+          mediaId,
+        });
+        return mediaId;
+      }
+    } catch (mediaErr) {
+      const errDetail = mediaErr.response?.data?.error || { message: mediaErr.message };
+      console.error('[META_HEADER_UPLOAD_TRACE] WhatsApp Cloud Media upload failed:', errDetail);
+    }
+  }
+
+  throw new Error(
+    `Meta Header Media Upload failed. Ensure FACEBOOK_APP_ID or META_PHONE_NUMBER_ID is configured in environment or workspace setup.`
+  );
 }
 
 /**
