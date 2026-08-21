@@ -101,6 +101,43 @@ function getTemplateBodyText(template) {
   return '';
 }
 
+const PRESET_VARIABLE_MAPPINGS = [
+  {
+    group: 'Contact Built-in Fields',
+    items: [
+      { label: '👤 Contact Full Name', value: '{{name}}' },
+      { label: '📱 Phone Number', value: '{{phone}}' },
+      { label: '✉️ Email Address', value: '{{email}}' },
+      { label: '🏢 Company Name', value: '{{company}}' },
+      { label: '💼 Designation / Role', value: '{{designation}}' },
+      { label: '🏙️ City', value: '{{city}}' },
+      { label: '📍 State', value: '{{state}}' },
+      { label: '🌐 Country', value: '{{country}}' },
+      { label: '⭐ Lead Score', value: '{{leadScore}}' },
+    ],
+  },
+  {
+    group: 'Workflow & Service Request Fields',
+    items: [
+      { label: '🎫 Service Request ID (serviceRequestId)', value: '{{custom.serviceRequestId}}' },
+      { label: '🔧 Technician / Vendor Name (technicianName)', value: '{{custom.technicianName}}' },
+      { label: '📅 Service Date / Time (serviceDate)', value: '{{custom.serviceDate}}' },
+      { label: '📊 Ticket Status (status)', value: '{{custom.status}}' },
+      { label: '🛠️ Service Category / Type (category)', value: '{{custom.category}}' },
+      { label: '📮 Pin Code (pincode)', value: '{{custom.pincode}}' },
+      { label: '🏠 Address (address)', value: '{{custom.address}}' },
+      { label: '📝 Details / Description (details)', value: '{{custom.details}}' },
+    ],
+  },
+  {
+    group: 'Custom Mapping & Fixed Values',
+    items: [
+      { label: '⚙️ Other Custom Field...', value: '__CUSTOM__' },
+      { label: '📌 Static Value (Fixed for all recipients)...', value: '__STATIC__' },
+    ],
+  },
+];
+
 /**
  * Parse a template to extract parameter placeholders {{1}}, {{2}}, etc.
  */
@@ -117,6 +154,8 @@ function parseTemplateVariables(template) {
   // Unique parameter indices in numerical order (1, 2, 3...)
   const indices = Array.from(new Set(matches.map(m => parseInt(m[1], 10)))).sort((a, b) => a - b);
 
+  const allPresetValues = PRESET_VARIABLE_MAPPINGS.flatMap(g => g.items.map(i => i.value));
+
   return indices.map(idx => {
     let sample = `Param ${idx}`;
     if (Array.isArray(template.variables)) {
@@ -125,10 +164,38 @@ function parseTemplateVariables(template) {
         sample = found.sampleValue || found.paramName;
       }
     }
+
+    let defaultMapping = '{{name}}';
+    const lowerSample = sample.toLowerCase();
+    if (lowerSample.includes('ticket') || lowerSample.includes('request') || lowerSample.includes('id')) {
+      defaultMapping = '{{custom.serviceRequestId}}';
+    } else if (lowerSample.includes('tech') || lowerSample.includes('vendor') || lowerSample.includes('assign')) {
+      defaultMapping = '{{custom.technicianName}}';
+    } else if (lowerSample.includes('date') || lowerSample.includes('time')) {
+      defaultMapping = '{{custom.serviceDate}}';
+    } else if (lowerSample.includes('status')) {
+      defaultMapping = '{{custom.status}}';
+    } else if (lowerSample.includes('cat') || lowerSample.includes('type')) {
+      defaultMapping = '{{custom.category}}';
+    } else if (lowerSample.includes('code') || lowerSample.includes('pin')) {
+      defaultMapping = '{{custom.pincode}}';
+    } else if (lowerSample.includes('addr')) {
+      defaultMapping = '{{custom.address}}';
+    } else if (lowerSample.includes('detail') || lowerSample.includes('desc')) {
+      defaultMapping = '{{custom.details}}';
+    } else if (idx === 1) {
+      defaultMapping = '{{name}}';
+    }
+
+    const isPreset = allPresetValues.includes(defaultMapping);
+
     return {
       index: idx,
       label: sample,
-      value: '',
+      mappingType: isPreset ? defaultMapping : '__CUSTOM__',
+      customKey: !isPreset && defaultMapping.startsWith('{{custom.') ? defaultMapping.slice(9, -2) : '',
+      staticValue: '',
+      value: defaultMapping,
     };
   });
 }
@@ -737,32 +804,118 @@ export default function BroadcastsManager() {
 
                 {/* Variable inputs */}
                 {templateVariables.length > 0 && (
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-2">
-                      Template Parameters <span className="text-rose-400">*</span>
-                      <span className="ml-1 normal-case text-slate-600 font-normal">(sent to every recipient)</span>
-                    </p>
-                    <div className="space-y-2">
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">
+                        Dynamic Variable Parameter Mappings <span className="text-rose-400">*</span>
+                      </p>
+                      <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                        ⚡ Resolved per recipient at send time
+                      </span>
+                    </div>
+                    <div className="space-y-2.5">
                       {templateVariables.map((v, i) => (
-                        <div key={v.index} className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1 flex-shrink-0 w-12 text-center">{`{{${v.index}}}`}</span>
-                          <input
-                            type="text"
-                            required
-                            placeholder={`Value for {{${v.index}}} e.g. ${v.label}`}
-                            value={v.value}
-                            onChange={(e) => {
-                              const updated = [...templateVariables];
-                              updated[i] = { ...updated[i], value: e.target.value };
-                              setTemplateVariables(updated);
-                            }}
-                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                          />
+                        <div key={v.index} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 font-bold">
+                                {`{{${v.index}}}`}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-200">
+                                {v.label}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px]">
+                              Mapping: <span className="text-teal-400 font-bold">{v.value || '-'}</span>
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-1">Select Data Field</label>
+                              <select
+                                value={v.mappingType}
+                                onChange={(e) => {
+                                  const newType = e.target.value;
+                                  const updated = [...templateVariables];
+                                  let newValue = newType;
+                                  if (newType === '__CUSTOM__') {
+                                    newValue = v.customKey ? `{{custom.${v.customKey}}}` : '';
+                                  } else if (newType === '__STATIC__') {
+                                    newValue = v.staticValue || '';
+                                  }
+                                  updated[i] = {
+                                    ...updated[i],
+                                    mappingType: newType,
+                                    value: newValue,
+                                  };
+                                  setTemplateVariables(updated);
+                                }}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] focus:outline-none focus:border-emerald-500 font-medium"
+                              >
+                                {PRESET_VARIABLE_MAPPINGS.map((grp) => (
+                                  <optgroup key={grp.group} label={grp.group}>
+                                    {grp.items.map((item) => (
+                                      <option key={item.value} value={item.value}>
+                                        {item.label}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ))}
+                              </select>
+                            </div>
+
+                            {v.mappingType === '__CUSTOM__' && (
+                              <div>
+                                <label className="block text-[10px] text-slate-400 mb-1">Custom Field Key Name *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. serviceRequestId or invoice_no"
+                                  value={v.customKey || ''}
+                                  onChange={(e) => {
+                                    const key = e.target.value.trim();
+                                    const updated = [...templateVariables];
+                                    updated[i] = {
+                                      ...updated[i],
+                                      customKey: key,
+                                      value: key ? `{{custom.${key}}}` : '',
+                                    };
+                                    setTemplateVariables(updated);
+                                  }}
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
+                                />
+                              </div>
+                            )}
+
+                            {v.mappingType === '__STATIC__' && (
+                              <div>
+                                <label className="block text-[10px] text-slate-400 mb-1">Static Text Value *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. 20% OFF or FESTIVE2026"
+                                  value={v.staticValue || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const updated = [...templateVariables];
+                                    updated[i] = {
+                                      ...updated[i],
+                                      staticValue: val,
+                                      value: val,
+                                    };
+                                    setTemplateVariables(updated);
+                                  }}
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-slate-600 mt-1.5">
-                      These values replace the placeholders in the template body for every recipient.
+                    <p className="text-[10px] text-slate-500">
+                      💡 Each recipient will receive their personalized data values for the mapped fields when dispatched.
                     </p>
                   </div>
                 )}

@@ -40,6 +40,96 @@ import crypto from 'crypto';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
+ * Resolves a template variable mapping token for a recipient contact.
+ * Supports:
+ *  - Contact built-in fields: {{name}}, {{phone}}, {{email}}, {{company}}, {{designation}}, {{city}}, {{state}}, {{country}}, {{leadScore}}
+ *  - Contact custom fields / Service Request fields: {{custom.serviceRequestId}}, {{custom.technicianName}}, {{custom.serviceDate}}, {{custom.status}}, {{custom.pincode}}, {{custom.address}}, {{custom.details}}, {{custom.category}}, or custom key names
+ *  - Static values: Any fixed text string (e.g. "OFFER2026")
+ */
+export function resolveRecipientVariable(val, contact) {
+  if (val === null || val === undefined) return '-';
+  const tokenStr = String(val).trim();
+  if (!tokenStr) return '-';
+
+  const lowerToken = tokenStr.toLowerCase();
+
+  // 1. Built-in Contact fields
+  if (lowerToken === '{{name}}' || lowerToken === 'name') {
+    return contact.name || 'Customer';
+  }
+  if (lowerToken === '{{phone}}' || lowerToken === 'phone') {
+    return contact.phone || '';
+  }
+  if (lowerToken === '{{email}}' || lowerToken === 'email') {
+    return contact.email || '';
+  }
+  if (lowerToken === '{{company}}' || lowerToken === '{{companyname}}' || lowerToken === 'company' || lowerToken === 'companyname') {
+    return contact.companyName || '';
+  }
+  if (lowerToken === '{{designation}}' || lowerToken === 'designation') {
+    return contact.designation || '';
+  }
+  if (lowerToken === '{{city}}' || lowerToken === 'city') {
+    return contact.city || '';
+  }
+  if (lowerToken === '{{state}}' || lowerToken === 'state') {
+    return contact.state || '';
+  }
+  if (lowerToken === '{{country}}' || lowerToken === 'country') {
+    return contact.country || '';
+  }
+  if (lowerToken === '{{leadscore}}' || lowerToken === 'leadscore') {
+    return contact.leadScore !== undefined && contact.leadScore !== null ? String(contact.leadScore) : '';
+  }
+  if (lowerToken === '{{language}}' || lowerToken === 'language') {
+    return contact.language || '';
+  }
+
+  // 2. Custom Contact fields & Service Request fields
+  let customKey = '';
+  const customMatch = tokenStr.match(/^\{\{\s*custom\.(.*?)\s*\}\}$/i) || tokenStr.match(/^custom\.(.*)$/i);
+  if (customMatch) {
+    customKey = customMatch[1].trim();
+  } else if (tokenStr.startsWith('{{') && tokenStr.endsWith('}}')) {
+    customKey = tokenStr.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim();
+  } else {
+    customKey = tokenStr;
+  }
+
+  if (contact.customFields && customKey) {
+    const snakeKey = customKey.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    const camelKey = customKey.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
+
+    let customVal = null;
+    if (typeof contact.customFields.get === 'function') {
+      customVal =
+        contact.customFields.get(customKey) ||
+        contact.customFields.get(customKey.toLowerCase()) ||
+        contact.customFields.get(snakeKey) ||
+        contact.customFields.get(camelKey);
+    } else if (typeof contact.customFields === 'object') {
+      customVal =
+        contact.customFields[customKey] ||
+        contact.customFields[customKey.toLowerCase()] ||
+        contact.customFields[snakeKey] ||
+        contact.customFields[camelKey];
+    }
+
+    if (customVal !== null && customVal !== undefined && String(customVal).trim() !== '') {
+      return String(customVal).trim();
+    }
+  }
+
+  // 3. Fallback if placeholder tag {{custom.X}} was used but value was missing
+  if (tokenStr.startsWith('{{') && tokenStr.endsWith('}}')) {
+    return '-';
+  }
+
+  // 4. Static value string
+  return tokenStr;
+}
+
+/**
  * Generate a short URL-safe tracking ID (18 chars).
  * Uses crypto.randomBytes for collision safety.
  */
@@ -162,22 +252,9 @@ export async function executeBroadcastCore(broadcast, company, actor = null) {
 
       if (broadcast.variables && Array.isArray(broadcast.variables) && broadcast.variables.length > 0) {
         const bodyParameters = broadcast.variables.map((val) => {
-          let textVal = String(val ?? '').trim();
+          let textVal = resolveRecipientVariable(val, contact);
 
-          // Dynamic variable substitution per recipient contact
-          if (textVal === '{{name}}' || textVal.toLowerCase() === '{{name}}') {
-            textVal = contact.name || 'Customer';
-          } else if (textVal === '{{phone}}' || textVal.toLowerCase() === '{{phone}}') {
-            textVal = contact.phone || '';
-          } else if (textVal === '{{email}}' || textVal.toLowerCase() === '{{email}}') {
-            textVal = contact.email || '';
-          } else if (textVal === '{{company}}' || textVal.toLowerCase() === '{{company}}') {
-            textVal = contact.companyName || '';
-          } else if (textVal === '{{city}}' || textVal.toLowerCase() === '{{city}}') {
-            textVal = contact.city || '';
-          }
-
-          if (!textVal) {
+          if (!textVal || textVal.trim() === '') {
             textVal = '-';
           }
 
