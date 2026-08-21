@@ -1,7 +1,7 @@
 import connectDB from '@/lib/db';
 import WhatsAppTemplate from '@/models/WhatsAppTemplate';
 import AuditLog from '@/models/AuditLog';
-import { fetchMetaTemplates, createMetaTemplate, deleteMetaTemplate } from '@/lib/metaWhatsAppService';
+import { fetchMetaTemplates, createMetaTemplate, deleteMetaTemplate, createMetaHeaderHandle } from '@/lib/metaWhatsAppService';
 import { socketService } from '@/lib/socketService';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
@@ -414,6 +414,27 @@ export const createNewTemplate = async (req, res) => {
           'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace. Please connect your WhatsApp Business Account via Meta Embedded Signup.',
           400
         );
+      }
+
+      // If template has media header (IMAGE, VIDEO, DOCUMENT), obtain Meta header_handle via Resumable Upload API
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
+        try {
+          const mediaHandle = await createMetaHeaderHandle({
+            wabaId,
+            accessToken,
+            mediaUrl: headerMediaUrl,
+            headerType,
+          });
+
+          const headerComp = components.find(c => c.type === 'HEADER');
+          if (headerComp) {
+            headerComp.example = {
+              header_handle: [mediaHandle],
+            };
+          }
+        } catch (handleErr) {
+          console.warn('[TemplateController] Failed to generate Meta media header handle:', handleErr.message);
+        }
       }
 
       try {

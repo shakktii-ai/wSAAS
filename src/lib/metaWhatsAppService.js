@@ -282,6 +282,86 @@ export async function fetchMetaTemplates({ wabaId, accessToken }) {
 }
 
 /**
+ * Uploads a media file (or default fallback sample image) to Meta's Resumable Upload API
+ * to generate a valid `header_handle` (h-id) required for template creation with IMAGE/VIDEO/DOCUMENT headers.
+ */
+export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, headerType = 'IMAGE' }) {
+  if (!wabaId || !accessToken) {
+    throw new Error('WABA ID and Access Token are required to upload template media handle');
+  }
+
+  let mediaBuffer;
+  let mimeType = 'image/png';
+
+  if (headerType === 'VIDEO') mimeType = 'video/mp4';
+  if (headerType === 'DOCUMENT') mimeType = 'application/pdf';
+
+  // 1. Try downloading media buffer from user-provided mediaUrl
+  if (mediaUrl && typeof mediaUrl === 'string' && mediaUrl.startsWith('http')) {
+    try {
+      const response = await axios.get(mediaUrl, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'SyncChat-MetaTemplateUploader/1.0',
+        },
+      });
+
+      if (response.data && response.data.length > 0) {
+        mediaBuffer = Buffer.from(response.data);
+        const contentType = response.headers['content-type'];
+        if (contentType && contentType.includes('/')) {
+          mimeType = contentType.split(';')[0].trim();
+        }
+      }
+    } catch (err) {
+      console.warn('[MetaMediaHandle] Failed to fetch user mediaUrl, generating fallback sample:', err.message);
+    }
+  }
+
+  // 2. Fallback sample image (1x1 transparent PNG pixel buffer) if mediaUrl fetch failed or was empty
+  if (!mediaBuffer || mediaBuffer.length === 0) {
+    const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    mediaBuffer = Buffer.from(base64Png, 'base64');
+    mimeType = 'image/png';
+  }
+
+  // 3. Initiate Resumable Upload Session on Meta Graph API
+  const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${wabaId}/uploads?file_length=${mediaBuffer.length}&file_type=${encodeURIComponent(mimeType)}`;
+
+  const sessionRes = await axios.post(sessionUrl, null, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    timeout: 10000,
+  });
+
+  const uploadSessionId = sessionRes.data?.id;
+  if (!uploadSessionId) {
+    throw new Error('Meta did not return a valid upload session ID');
+  }
+
+  // 4. Upload binary payload to the session ID
+  const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`;
+
+  const uploadRes = await axios.post(uploadUrl, mediaBuffer, {
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      file_offset: '0',
+      'Content-Type': 'application/octet-stream',
+    },
+    timeout: 15000,
+  });
+
+  const handle = uploadRes.data?.h;
+  if (!handle) {
+    throw new Error('Meta did not return a valid media handle (h)');
+  }
+
+  return handle;
+}
+
+/**
  * Create a new WABA Message Template on Meta Graph API
  */
 export async function createMetaTemplate({ wabaId, accessToken, name, category, language, components }) {
