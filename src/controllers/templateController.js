@@ -426,14 +426,15 @@ export const createNewTemplate = async (req, res) => {
             headerType,
           });
 
-          const headerComp = components.find(c => c.type === 'HEADER');
+          const headerComp = components.find((c) => c.type === 'HEADER');
           if (headerComp) {
             headerComp.example = {
               header_handle: [mediaHandle],
             };
           }
         } catch (handleErr) {
-          console.warn('[TemplateController] Failed to generate Meta media header handle:', handleErr.message);
+          console.error('[TemplateController] Failed to generate Meta media header handle:', handleErr.message);
+          return errorResponse(res, `Meta Header Media Upload Error: ${handleErr.message}`, 400);
         }
       }
 
@@ -627,6 +628,27 @@ export const updateTemplate = async (req, res) => {
         return errorResponse(res, 'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace.', 400);
       }
 
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
+        try {
+          const mediaHandle = await createMetaHeaderHandle({
+            wabaId,
+            accessToken,
+            mediaUrl: headerMediaUrl,
+            headerType,
+          });
+
+          const headerComp = components.find((c) => c.type === 'HEADER');
+          if (headerComp) {
+            headerComp.example = {
+              header_handle: [mediaHandle],
+            };
+          }
+        } catch (handleErr) {
+          console.error('[TemplateController] Failed to generate Meta media header handle:', handleErr.message);
+          return errorResponse(res, `Meta Header Media Upload Error: ${handleErr.message}`, 400);
+        }
+      }
+
       const metaResult = await createMetaTemplate({
         wabaId,
         accessToken,
@@ -683,6 +705,29 @@ export const submitTemplateToMeta = async (req, res) => {
 
     if (!wabaId || !accessToken) {
       return errorResponse(res, 'WhatsApp Business Account credentials (WABA ID or Access Token) are missing or expired for this workspace.', 400);
+    }
+
+    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(template.headerType)) {
+      try {
+        const mediaHandle = await createMetaHeaderHandle({
+          wabaId,
+          accessToken,
+          mediaUrl: template.headerMediaUrl,
+          headerType: template.headerType,
+        });
+
+        if (Array.isArray(template.components)) {
+          const headerComp = template.components.find((c) => c.type === 'HEADER');
+          if (headerComp) {
+            headerComp.example = {
+              header_handle: [mediaHandle],
+            };
+          }
+        }
+      } catch (handleErr) {
+        console.error('[TemplateController] Failed to generate Meta media header handle:', handleErr.message);
+        return errorResponse(res, `Meta Header Media Upload Error: ${handleErr.message}`, 400);
+      }
     }
 
     try {

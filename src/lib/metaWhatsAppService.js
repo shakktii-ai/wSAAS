@@ -292,9 +292,15 @@ export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, he
 
   let mediaBuffer;
   let mimeType = 'image/png';
+  let fileName = 'sample.png';
 
-  if (headerType === 'VIDEO') mimeType = 'video/mp4';
-  if (headerType === 'DOCUMENT') mimeType = 'application/pdf';
+  if (headerType === 'VIDEO') {
+    mimeType = 'video/mp4';
+    fileName = 'sample.mp4';
+  } else if (headerType === 'DOCUMENT') {
+    mimeType = 'application/pdf';
+    fileName = 'sample.pdf';
+  }
 
   // 1. Try downloading media buffer from user-provided mediaUrl
   if (mediaUrl && typeof mediaUrl === 'string' && mediaUrl.startsWith('http')) {
@@ -324,41 +330,48 @@ export async function createMetaHeaderHandle({ wabaId, accessToken, mediaUrl, he
     const base64Png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     mediaBuffer = Buffer.from(base64Png, 'base64');
     mimeType = 'image/png';
+    fileName = 'sample.png';
   }
 
-  // 3. Initiate Resumable Upload Session on Meta Graph API
-  const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${wabaId}/uploads?file_length=${mediaBuffer.length}&file_type=${encodeURIComponent(mimeType)}`;
+  // 3. Initiate Resumable Upload Session on Meta Graph API with required file_name parameter
+  const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${wabaId}/uploads?file_name=${encodeURIComponent(fileName)}&file_length=${mediaBuffer.length}&file_type=${encodeURIComponent(mimeType)}`;
 
-  const sessionRes = await axios.post(sessionUrl, null, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    timeout: 10000,
-  });
+  try {
+    const sessionRes = await axios.post(sessionUrl, null, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      timeout: 10000,
+    });
 
-  const uploadSessionId = sessionRes.data?.id;
-  if (!uploadSessionId) {
-    throw new Error('Meta did not return a valid upload session ID');
+    const uploadSessionId = sessionRes.data?.id;
+    if (!uploadSessionId) {
+      throw new Error('Meta did not return a valid upload session ID');
+    }
+
+    // 4. Upload binary payload to the session ID
+    const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`;
+
+    const uploadRes = await axios.post(uploadUrl, mediaBuffer, {
+      headers: {
+        Authorization: `OAuth ${accessToken}`,
+        file_offset: '0',
+        'Content-Type': 'application/octet-stream',
+      },
+      timeout: 15000,
+    });
+
+    const handle = uploadRes.data?.h;
+    if (!handle) {
+      throw new Error('Meta did not return a valid media handle (h)');
+    }
+
+    return handle;
+  } catch (err) {
+    const metaErrMsg = err.response?.data?.error?.message || err.message;
+    console.error('[MetaMediaHandle] Upload session error:', metaErrMsg);
+    throw new Error(`Failed to upload template media handle to Meta: ${metaErrMsg}`);
   }
-
-  // 4. Upload binary payload to the session ID
-  const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`;
-
-  const uploadRes = await axios.post(uploadUrl, mediaBuffer, {
-    headers: {
-      Authorization: `OAuth ${accessToken}`,
-      file_offset: '0',
-      'Content-Type': 'application/octet-stream',
-    },
-    timeout: 15000,
-  });
-
-  const handle = uploadRes.data?.h;
-  if (!handle) {
-    throw new Error('Meta did not return a valid media handle (h)');
-  }
-
-  return handle;
 }
 
 /**
