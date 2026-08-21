@@ -1,3 +1,4 @@
+import { Kafka, logLevel } from 'kafkajs';
 import EventEmitter from 'events';
 
 // In-process fallback event bus for environments without Kafka brokers
@@ -12,25 +13,14 @@ let kafkaInstance = null;
 let producerInstance = null;
 let isProducerConnected = false;
 
-// Dynamic loader for kafkajs to prevent build failures if module is uninstalled or bundled in Next.js
-async function getKafkaJSModule() {
-  try {
-    const req = eval('require');
-    const kafkaModule = req('kafkajs');
-    return kafkaModule.default || kafkaModule;
-  } catch (err) {
-    console.warn('[KAFKA_TRACE] KafkaJS module not available in environment:', err.message);
+function initKafkaClient() {
+  if (!isKafkaEnabled || brokers.length === 0) {
     return null;
   }
-}
 
-async function initKafkaClient() {
-  if (!isKafkaEnabled || brokers.length === 0 || kafkaInstance) {
+  if (kafkaInstance) {
     return kafkaInstance;
   }
-
-  const { Kafka, logLevel } = (await getKafkaJSModule()) || {};
-  if (!Kafka) return null;
 
   try {
     const saslUsername = process.env.KAFKA_USERNAME || process.env.KAFKA_SASL_USERNAME;
@@ -84,7 +74,7 @@ export async function getKafkaProducer() {
     return null;
   }
 
-  const kafka = await initKafkaClient();
+  const kafka = initKafkaClient();
   if (!kafka) return null;
 
   if (producerInstance && isProducerConnected) {
@@ -115,7 +105,7 @@ export async function createKafkaConsumer(
     return null;
   }
 
-  const kafka = await initKafkaClient();
+  const kafka = initKafkaClient();
   if (!kafka) return null;
 
   try {
@@ -139,11 +129,11 @@ export async function checkKafkaHealth() {
     };
   }
 
-  const kafka = await initKafkaClient();
+  const kafka = initKafkaClient();
   if (!kafka) {
     return {
       enabled: true,
-      status: 'KAFKAJS_MODULE_NOT_LOADED',
+      status: 'KAFKA_CLIENT_NOT_INITIALIZED',
       brokers,
     };
   }
