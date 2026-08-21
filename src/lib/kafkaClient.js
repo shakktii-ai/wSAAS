@@ -13,6 +13,19 @@ let kafkaInstance = null;
 let producerInstance = null;
 let isProducerConnected = false;
 
+/**
+ * Safely normalizes multiline CA certificate strings passed via environment variables.
+ * Handles both literal '\n' characters and real newlines.
+ */
+function normalizeCaCert(rawCert) {
+  if (!rawCert) return null;
+  let cert = String(rawCert).trim();
+  if (cert.includes('\\n')) {
+    cert = cert.replace(/\\n/g, '\n');
+  }
+  return cert;
+}
+
 function initKafkaClient() {
   if (!isKafkaEnabled || brokers.length === 0) {
     return null;
@@ -32,13 +45,16 @@ function initKafkaClient() {
     let sslConfig = false;
 
     if (isSslEnabled) {
-      if (process.env.KAFKA_CA_CERT) {
+      const normalizedCa = normalizeCaCert(process.env.KAFKA_CA_CERT);
+      if (normalizedCa) {
         sslConfig = {
           rejectUnauthorized: true,
-          ca: [process.env.KAFKA_CA_CERT],
+          ca: [normalizedCa],
         };
       } else {
-        sslConfig = true;
+        sslConfig = {
+          rejectUnauthorized: true,
+        };
       }
     }
 
