@@ -138,6 +138,19 @@ const PRESET_VARIABLE_MAPPINGS = [
   },
 ];
 
+function detectParamLabelFromBody(bodyText, idx, fallbackLabel) {
+  if (!bodyText) return fallbackLabel || `Param ${idx}`;
+  const regex = new RegExp(`(?:\\d+\\.\\s*)?([^\\n{}:]+)[:\\s=]*\\{\\{${idx}\\}\\}`, 'i');
+  const match = bodyText.match(regex);
+  if (match && match[1]) {
+    const extracted = match[1].trim().replace(/^[\d.\s\-\*]+/, '').trim();
+    if (extracted && extracted.length > 1) {
+      return extracted;
+    }
+  }
+  return fallbackLabel || `Param ${idx}`;
+}
+
 /**
  * Parse a template to extract parameter placeholders {{1}}, {{2}}, etc.
  */
@@ -165,23 +178,25 @@ function parseTemplateVariables(template) {
       }
     }
 
+    const detectedLabel = detectParamLabelFromBody(bodyText, idx, sample);
+    const labelToMatch = (detectedLabel !== `Param ${idx}` ? detectedLabel : sample).toLowerCase();
+
     let defaultMapping = '{{name}}';
-    const lowerSample = sample.toLowerCase();
-    if (lowerSample.includes('ticket') || lowerSample.includes('request') || lowerSample.includes('id')) {
+    if (labelToMatch.includes('ticket') || labelToMatch.includes('request') || labelToMatch.includes('id')) {
       defaultMapping = '{{custom.serviceRequestId}}';
-    } else if (lowerSample.includes('tech') || lowerSample.includes('vendor') || lowerSample.includes('assign')) {
+    } else if (labelToMatch.includes('tech') || labelToMatch.includes('vendor') || labelToMatch.includes('assign')) {
       defaultMapping = '{{custom.technicianName}}';
-    } else if (lowerSample.includes('date') || lowerSample.includes('time')) {
+    } else if (labelToMatch.includes('date') || labelToMatch.includes('time')) {
       defaultMapping = '{{custom.serviceDate}}';
-    } else if (lowerSample.includes('status')) {
+    } else if (labelToMatch.includes('status')) {
       defaultMapping = '{{custom.status}}';
-    } else if (lowerSample.includes('cat') || lowerSample.includes('type')) {
+    } else if (labelToMatch.includes('cat') || labelToMatch.includes('type')) {
       defaultMapping = '{{custom.category}}';
-    } else if (lowerSample.includes('code') || lowerSample.includes('pin')) {
+    } else if (labelToMatch.includes('code') || labelToMatch.includes('pin')) {
       defaultMapping = '{{custom.pincode}}';
-    } else if (lowerSample.includes('addr')) {
+    } else if (labelToMatch.includes('addr')) {
       defaultMapping = '{{custom.address}}';
-    } else if (lowerSample.includes('detail') || lowerSample.includes('desc')) {
+    } else if (labelToMatch.includes('detail') || labelToMatch.includes('desc')) {
       defaultMapping = '{{custom.details}}';
     } else if (idx === 1) {
       defaultMapping = '{{name}}';
@@ -191,7 +206,7 @@ function parseTemplateVariables(template) {
 
     return {
       index: idx,
-      label: sample,
+      label: detectedLabel,
       mappingType: isPreset ? defaultMapping : '__CUSTOM__',
       customKey: !isPreset && defaultMapping.startsWith('{{custom.') ? defaultMapping.slice(9, -2) : '',
       staticValue: '',
@@ -730,10 +745,10 @@ export default function BroadcastsManager() {
         </Card>
 
         {/* ── Create Broadcast Modal ── */}
-        <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetCreateForm(); }} title="New WhatsApp Broadcast Campaign">
+        <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetCreateForm(); }} title="New WhatsApp Broadcast Campaign" maxWidth="max-w-2xl">
           {createError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {createError}
+            <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-semibold">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" /> {createError}
             </div>
           )}
 
@@ -741,25 +756,25 @@ export default function BroadcastsManager() {
 
             {/* Campaign name */}
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Campaign Name *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Campaign Name *</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Festive Sale Offer 2026"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
               />
             </div>
 
             {/* Type + Template */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Campaign Type</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Campaign Type</label>
                 <select
                   value={campaignType}
                   onChange={(e) => setCampaignType(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
                 >
                   <option value="PROMOTIONAL">PROMOTIONAL</option>
                   <option value="TRANSACTIONAL">TRANSACTIONAL</option>
@@ -767,7 +782,7 @@ export default function BroadcastsManager() {
                 </select>
               </div>
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Meta Template *</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Meta Template *</label>
                 <select
                   required
                   value={templateName}
@@ -777,7 +792,7 @@ export default function BroadcastsManager() {
                     setSelectedTemplate(chosen);
                     setTemplateVariables(chosen ? parseTemplateVariables(chosen) : []);
                   }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
                 >
                   {templates.length === 0 && (
                     <option value="">No approved templates</option>
@@ -793,46 +808,46 @@ export default function BroadcastsManager() {
 
             {/* ── Template preview + variable inputs ── */}
             {selectedTemplate && (
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-700 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3.5 shadow-xs">
                 {/* Body preview */}
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide mb-1">Template Body Preview</p>
-                  <p className="text-slate-300 text-[11px] leading-relaxed whitespace-pre-wrap">
-                    {getTemplateBodyText(selectedTemplate) || <span className="italic text-slate-600">No body text</span>}
-                  </p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1.5">Template Body Preview</p>
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-slate-800 font-mono text-xs leading-relaxed whitespace-pre-wrap shadow-xs">
+                    {getTemplateBodyText(selectedTemplate) || <span className="italic text-slate-400">No body text</span>}
+                  </div>
                 </div>
 
                 {/* Variable inputs */}
                 {templateVariables.length > 0 && (
                   <div className="space-y-3 pt-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">
-                        Dynamic Variable Parameter Mappings <span className="text-rose-400">*</span>
+                      <p className="text-[10px] text-slate-700 uppercase font-bold tracking-wider">
+                        Dynamic Variable Parameter Mappings <span className="text-rose-500">*</span>
                       </p>
-                      <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                      <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
                         ⚡ Resolved per recipient at send time
                       </span>
                     </div>
                     <div className="space-y-2.5">
                       {templateVariables.map((v, i) => (
-                        <div key={v.index} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div key={v.index} className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-2.5">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 font-bold">
+                              <span className="text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-0.5 font-extrabold">
                                 {`{{${v.index}}}`}
                               </span>
-                              <span className="text-xs font-semibold text-slate-200">
+                              <span className="text-xs font-bold text-slate-900">
                                 {v.label}
                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px]">
-                              Mapping: <span className="text-teal-400 font-bold">{v.value || '-'}</span>
+                            <span className="text-[10px] text-slate-500 font-mono truncate max-w-[200px]">
+                              Mapped: <span className="text-emerald-700 font-bold">{v.value || '-'}</span>
                             </span>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <div>
-                              <label className="block text-[10px] text-slate-400 mb-1">Select Data Field</label>
+                              <label className="block text-[10px] text-slate-600 mb-1 font-bold">Select Data Field</label>
                               <select
                                 value={v.mappingType}
                                 onChange={(e) => {
@@ -851,7 +866,7 @@ export default function BroadcastsManager() {
                                   };
                                   setTemplateVariables(updated);
                                 }}
-                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] focus:outline-none focus:border-emerald-500 font-medium"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
                               >
                                 {PRESET_VARIABLE_MAPPINGS.map((grp) => (
                                   <optgroup key={grp.group} label={grp.group}>
@@ -867,7 +882,7 @@ export default function BroadcastsManager() {
 
                             {v.mappingType === '__CUSTOM__' && (
                               <div>
-                                <label className="block text-[10px] text-slate-400 mb-1">Custom Field Key Name *</label>
+                                <label className="block text-[10px] text-slate-600 mb-1 font-bold">Custom Field Key Name *</label>
                                 <input
                                   type="text"
                                   required
@@ -883,14 +898,14 @@ export default function BroadcastsManager() {
                                     };
                                     setTemplateVariables(updated);
                                   }}
-                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white font-mono transition-colors"
                                 />
                               </div>
                             )}
 
                             {v.mappingType === '__STATIC__' && (
                               <div>
-                                <label className="block text-[10px] text-slate-400 mb-1">Static Text Value *</label>
+                                <label className="block text-[10px] text-slate-600 mb-1 font-bold">Static Text Value *</label>
                                 <input
                                   type="text"
                                   required
@@ -906,7 +921,7 @@ export default function BroadcastsManager() {
                                     };
                                     setTemplateVariables(updated);
                                   }}
-                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-[11px] placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white font-medium transition-colors"
                                 />
                               </div>
                             )}
@@ -915,13 +930,13 @@ export default function BroadcastsManager() {
                       ))}
                     </div>
                     <p className="text-[10px] text-slate-500">
-                      💡 Each recipient will receive their personalized data values for the mapped fields when dispatched.
+                      💡 Each recipient receives their personalized data values for the mapped fields when dispatched.
                     </p>
                   </div>
                 )}
 
                 {templateVariables.length === 0 && (
-                  <p className="text-[10px] text-emerald-500/70">
+                  <p className="text-[10px] text-emerald-700 font-bold">
                     ✓ No variable parameters — this template sends as-is.
                   </p>
                 )}
@@ -931,11 +946,11 @@ export default function BroadcastsManager() {
             {/* Audience */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Target Audience</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Target Audience</label>
                 <select
                   value={targetType}
                   onChange={(e) => { setTargetType(e.target.value); setTargetValue(''); }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
                 >
                   <option value="all">All Contacts</option>
                   <option value="group">Specific Group</option>
@@ -944,7 +959,7 @@ export default function BroadcastsManager() {
               </div>
               {targetType !== 'all' && (
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     {targetType === 'group' ? 'Group Name' : 'Tag Name'}
                   </label>
                   <input
@@ -952,7 +967,7 @@ export default function BroadcastsManager() {
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
                     placeholder={targetType === 'group' ? 'VIP Customers' : 'leads'}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
                   />
                 </div>
               )}
@@ -960,7 +975,7 @@ export default function BroadcastsManager() {
 
             {/* ── Send mode selector ── */}
             <div>
-              <label className="block text-slate-300 font-medium mb-2">When to Send</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">When to Send</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -969,42 +984,41 @@ export default function BroadcastsManager() {
                     setScheduledAt('');   // clear schedule date when switching to Send Now
                     setCreateError('');
                   }}
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
                     sendMode === 'now'
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  <Zap className="w-4 h-4" /> Send Now
+                  <Zap className="w-4 h-4 text-emerald-600" /> Send Now
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setSendMode('later');
                     setCreateError('');
-                    // Auto-fill with the minimum valid datetime (now + 5 min) if blank
                     if (!scheduledAt) {
                       const d = new Date(Date.now() + 5 * 60 * 1000);
                       d.setSeconds(0, 0);
                       setScheduledAt(d.toISOString().slice(0, 16));
                     }
                   }}
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
                     sendMode === 'later'
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'
+                      ? 'bg-amber-50 border-amber-500 text-amber-700 shadow-xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  <CalendarDays className="w-4 h-4" /> Schedule Later
+                  <CalendarDays className="w-4 h-4 text-amber-600" /> Schedule Later
                 </button>
               </div>
             </div>
 
             {/* Date-time picker (only when schedule later) */}
             {sendMode === 'later' && (
-              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <label className="block text-amber-400 font-medium mb-1.5 flex items-center gap-1.5">
-                  <CalendarDays className="w-3.5 h-3.5" /> Schedule Date & Time *
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+                <label className="block text-amber-900 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-amber-700" /> Schedule Date & Time *
                 </label>
                 <input
                   type="datetime-local"
@@ -1012,9 +1026,9 @@ export default function BroadcastsManager() {
                   min={minDatetimeLocal()}
                   value={scheduledAt}
                   onChange={(e) => setScheduledAt(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-500 [color-scheme:dark]"
+                  className="w-full bg-white border border-amber-300 rounded-xl p-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-amber-600"
                 />
-                <p className="text-[10px] text-slate-500 mt-1.5">
+                <p className="text-[10px] text-amber-700">
                   Time is interpreted in your local timezone. The cron scheduler checks every minute.
                 </p>
               </div>
@@ -1097,18 +1111,18 @@ export default function BroadcastsManager() {
 
               {/* Button response details list */}
               {selectedReport.buttonResponses && selectedReport.buttonResponses.length > 0 && (
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Button Response Log</p>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Button Response Log</p>
                   <div className="max-h-32 overflow-y-auto space-y-1.5 font-mono text-[11px]">
                     {selectedReport.buttonResponses.map((resp, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
-                        <span className="text-slate-300 font-bold">{resp.phone}</span>
+                      <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                        <span className="text-slate-800 font-bold">{resp.phone}</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
                           (resp.buttonResponse || '').toLowerCase().includes('accept')
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : (resp.buttonResponse || '').toLowerCase().includes('decline')
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                            : 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-teal-50 text-teal-700 border border-teal-200'
                         }`}>
                           {resp.buttonResponse}
                         </span>
@@ -1122,33 +1136,33 @@ export default function BroadcastsManager() {
               )}
 
               {/* ── Row 3: Rates ── */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-3 gap-2 text-center font-mono">
                 <div>
-                  <span className="block text-[10px] text-slate-400 mb-1">Delivery Rate</span>
-                  <span className="text-emerald-400 font-bold text-sm">
+                  <span className="block text-[10px] text-slate-500 mb-1 font-sans font-medium">Delivery Rate</span>
+                  <span className="text-emerald-700 font-extrabold text-sm">
                     {selectedReport.rates?.deliveryRate || 0}%
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-slate-400 mb-1">Read Rate</span>
-                  <span className="text-purple-400 font-bold text-sm">
+                  <span className="block text-[10px] text-slate-500 mb-1 font-sans font-medium">Read Rate</span>
+                  <span className="text-purple-700 font-extrabold text-sm">
                     {selectedReport.rates?.readRate || 0}%
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-slate-400 mb-1">
+                  <span className="block text-[10px] text-slate-500 mb-1 font-sans font-medium">
                     CTR
-                    <span className="ml-1 text-slate-600 font-normal not-italic">(unique/sent)</span>
+                    <span className="ml-1 text-slate-400 font-normal not-italic">(unique/sent)</span>
                   </span>
-                  <span className="text-amber-400 font-bold text-sm">
+                  <span className="text-amber-700 font-extrabold text-sm">
                     {selectedReport.rates?.ctr || 0}%
                   </span>
                 </div>
               </div>
 
               {/* CTR formula note */}
-              <p className="text-[10px] text-slate-500 bg-slate-900 rounded-lg px-3 py-2 border border-slate-800">
-                <strong className="text-slate-400">CTR formula:</strong> Unique Clicks ÷ Messages Sent × 100.
+              <p className="text-[10px] text-slate-600 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-200">
+                <strong className="text-slate-800">CTR formula:</strong> Unique Clicks ÷ Messages Sent × 100.
                 A click is <em>unique</em> per contact per campaign (or per IP fingerprint for anonymous users).
                 Tracking URLs are embedded in broadcast messages automatically.
               </p>

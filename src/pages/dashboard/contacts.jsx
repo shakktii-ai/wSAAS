@@ -62,13 +62,31 @@ export default function ContactsManager() {
   const [submitting, setSubmitting] = useState(false);
   const [addError, setAddError] = useState('');
 
-  // CSV Import State
-  const [csvRaw, setCsvRaw] = useState(`[
-  { "name": "John Doe", "phone": "15551234567", "email": "john@example.com", "companyName": "Acme Inc", "city": "New York", "tags": ["VIP"] },
-  { "name": "Alice Smith", "phone": "15559876543", "email": "alice@example.com", "companyName": "TechCorp", "city": "San Francisco", "tags": ["Lead"] }
-]`);
+  // CSV Import & Template Mappings State
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [importMode, setImportMode] = useState('file'); // 'file' | 'raw'
+  const [parsedContacts, setParsedContacts] = useState([]);
+  const [detectedHeaders, setDetectedHeaders] = useState([]);
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [csvRaw, setCsvRaw] = useState('');
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState('');
+
+  // Fetch approved templates for CSV Sample Generation
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const res = await api.get('/templates?status=APPROVED');
+        if (res.success && res.data) {
+          setTemplates(res.data.templates || res.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch templates for import:', err);
+      }
+    };
+    fetchTemplates();
+  }, []);
 
   const fetchContacts = async () => {
     try {
@@ -155,21 +173,214 @@ export default function ContactsManager() {
     }
   };
 
+  // Parse CSV text into array of contact objects
+  const parseCSVToObjects = (csvText) => {
+    const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length === 0) return { objects: [], headers: [] };
+
+    const splitRow = (rowStr) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < rowStr.length; i++) {
+        const char = rowStr[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim().replace(/^"|"$/g, ''));
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim().replace(/^"|"$/g, ''));
+      return result;
+    };
+
+    const headers = splitRow(lines[0]).map(h => h.trim());
+    const objects = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = splitRow(lines[i]);
+      if (values.length === 0 || !values[0]) continue;
+      const obj = {};
+      headers.forEach((header, colIdx) => {
+        if (header) {
+          let val = values[colIdx] || '';
+          const lowerH = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (lowerH === 'name' || lowerH === 'fullname' || lowerH === 'contactname') {
+            obj.name = val;
+          } else if (lowerH === 'phone' || lowerH === 'mobile' || lowerH === 'phonenumber' || lowerH === 'waid') {
+            obj.phone = val;
+          } else if (lowerH === 'email' || lowerH === 'emailaddress') {
+            obj.email = val;
+          } else if (lowerH === 'company' || lowerH === 'companyname') {
+            obj.companyName = val;
+          } else if (lowerH === 'city') {
+            obj.city = val;
+          } else if (lowerH === 'tags' || lowerH === 'tag') {
+            obj.tags = val ? val.split(';').map(t => t.trim()).filter(Boolean) : ['Lead'];
+          } else {
+            // Custom contact field (e.g. serviceRequestId, category, pincode, address, details)
+            obj[header] = val;
+          }
+        }
+      });
+
+      if (obj.name && obj.phone) {
+        objects.push(obj);
+      }
+    }
+
+    return { objects, headers };
+  };
+
+  // Generate Sample CSV based on selected Meta Template parameters
+  const handleDownloadSampleCSV = () => {
+    const selectedTpl = templates.find(t => t._id === selectedTemplateId || t.name === selectedTemplateId);
+    
+    let standardHeaders = ['Name', 'Phone', 'Email', 'Company', 'City', 'Tags'];
+    let sampleRow1 = ['Omkar', '919876543210', 'omkar@example.com', 'Acme Services', 'Pune', 'VIP;Lead'];
+    let sampleRow2 = ['Alex Smith', '919876543211', 'alex@example.com', 'TechCorp', 'Mumbai', 'Lead'];
+
+    if (selectedTpl) {
+      const bodyText = selectedTpl.bodyText || (Array.isArray(selectedTpl.components) ? selectedTpl.components.find(c => (c.type || '').toUpperCase() === 'BODY')?.text : '') || '';
+      const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
+      const indices = Array.from(new Set(matches.map(m => parseInt(m[1], 10)))).sort((a, b) => a - b);
+
+      if (indices.length > 0) {
+        const extraHeaders = [];
+        const extraVals1 = [];
+        const extraVals2 = [];
+
+        indices.forEach(idx => {
+          const regex = new RegExp(`(?:\\d+\\.\\s*)?([^\\n{}:]+)[:\\s=]*\\{\\{${idx}\\}\\}`, 'i');
+          const match = bodyText.match(regex);
+          let label = match && match[1] ? match[1].trim().replace(/^[\d.\s\-\*]+/, '').trim() : `Param_${idx}`;
+          const lowerL = label.toLowerCase();
+
+          let keyName = label.replace(/[^a-zA-Z0-9]/g, '');
+          if (!keyName) keyName = `param${idx}`;
+
+          if (lowerL.includes('ticket') || lowerL.includes('request') || lowerL.includes('id')) {
+            keyName = 'serviceRequestId';
+            extraHeaders.push(keyName);
+            extraVals1.push('TKT001');
+            extraVals2.push('TKT002');
+          } else if (lowerL.includes('tech') || lowerL.includes('vendor') || lowerL.includes('assign')) {
+            keyName = 'technicianName';
+            extraHeaders.push(keyName);
+            extraVals1.push('Rahul Sharma');
+            extraVals2.push('Priya Verma');
+          } else if (lowerL.includes('date') || lowerL.includes('time')) {
+            keyName = 'serviceDate';
+            extraHeaders.push(keyName);
+            extraVals1.push('21 Aug 2026');
+            extraVals2.push('22 Aug 2026');
+          } else if (lowerL.includes('status')) {
+            keyName = 'status';
+            extraHeaders.push(keyName);
+            extraVals1.push('Pending');
+            extraVals2.push('In Progress');
+          } else if (lowerL.includes('cat') || lowerL.includes('type')) {
+            keyName = 'category';
+            extraHeaders.push(keyName);
+            extraVals1.push('Electrician');
+            extraVals2.push('Plumber');
+          } else if (lowerL.includes('code') || lowerL.includes('pin')) {
+            keyName = 'pincode';
+            extraHeaders.push(keyName);
+            extraVals1.push('411041');
+            extraVals2.push('411045');
+          } else if (lowerL.includes('addr')) {
+            keyName = 'address';
+            extraHeaders.push(keyName);
+            extraVals1.push('Baner, Pune');
+            extraVals2.push('Wakad, Pune');
+          } else if (lowerL.includes('detail') || lowerL.includes('desc')) {
+            keyName = 'details';
+            extraHeaders.push(keyName);
+            extraVals1.push('Water leakage in kitchen');
+            extraVals2.push('Bathroom pipe blockage');
+          } else {
+            extraHeaders.push(keyName);
+            extraVals1.push(`Sample_${idx}`);
+            extraVals2.push(`Sample_${idx}`);
+          }
+        });
+
+        standardHeaders.splice(4, 0, ...extraHeaders);
+        sampleRow1.splice(4, 0, ...extraVals1);
+        sampleRow2.splice(4, 0, ...extraVals2);
+      }
+    }
+
+    const csvContent = [
+      standardHeaders.map(h => `"${h}"`).join(','),
+      sampleRow1.map(v => `"${v}"`).join(','),
+      sampleRow2.map(v => `"${v}"`).join(','),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const tplSlug = selectedTpl ? selectedTpl.name : 'standard';
+    link.setAttribute('download', `sample_contacts_${tplSlug}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      setCsvRaw(text);
+      const { objects, headers } = parseCSVToObjects(text);
+      setParsedContacts(objects);
+      setDetectedHeaders(headers);
+    };
+    reader.readAsText(file);
+  };
+
   const handleImportCSV = async (e) => {
     e.preventDefault();
     setImporting(true);
     setImportSuccess('');
 
     try {
-      const parsedContacts = JSON.parse(csvRaw);
-      const res = await api.post('/contacts/import', { contacts: parsedContacts });
+      let contactsToSubmit = parsedContacts;
+
+      if (importMode === 'raw' || contactsToSubmit.length === 0) {
+        if (csvRaw.trim().startsWith('[')) {
+          contactsToSubmit = JSON.parse(csvRaw);
+        } else {
+          const { objects } = parseCSVToObjects(csvRaw);
+          contactsToSubmit = objects;
+        }
+      }
+
+      if (!contactsToSubmit || contactsToSubmit.length === 0) {
+        alert('No valid contact records found to import. Please check file format.');
+        setImporting(false);
+        return;
+      }
+
+      const res = await api.post('/contacts/import', { contacts: contactsToSubmit });
       if (res.success) {
         setImportSuccess(res.message);
         setIsImportOpen(false);
+        setParsedContacts([]);
+        setUploadFileName('');
         fetchContacts();
       }
     } catch (err) {
-      alert(err.message || 'Failed to parse JSON/CSV data');
+      alert(err.message || 'Failed to import contacts dataset');
     } finally {
       setImporting(false);
     }
@@ -579,24 +790,118 @@ export default function ContactsManager() {
         </Modal>
 
         {/* Import CSV Modal */}
-        <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="Import Contacts Dataset">
+        <Modal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} title="Import Contacts Dataset" maxWidth="max-w-2xl">
           <form onSubmit={handleImportCSV} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-300 font-medium mb-1">Paste JSON / CSV Array of Contacts</label>
-              <textarea
-                rows={8}
-                value={csvRaw}
-                onChange={(e) => setCsvRaw(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-emerald-400 focus:outline-none"
-              />
+
+            {/* Template Selection for Demo CSV */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                1. Select WhatsApp Template for Demo CSV (Optional)
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600"
+                >
+                  <option value="">Standard Contacts Template (Default)</option>
+                  {templates.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name} ({t.category})
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={Download}
+                  onClick={handleDownloadSampleCSV}
+                  className="shrink-0 text-xs font-bold text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
+                >
+                  Download Sample CSV
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                💡 The downloaded sample CSV automatically includes column headers matching your template parameters (e.g. serviceRequestId, category, pincode, address, details).
+              </p>
             </div>
 
-            <div className="flex justify-end gap-3">
+            {/* Import Mode Toggle */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setImportMode('file')}
+                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                  importMode === 'file'
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                📁 Upload CSV File
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode('raw')}
+                className={`flex-1 p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                  importMode === 'raw'
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                📝 Paste Raw CSV / JSON Text
+              </button>
+            </div>
+
+            {/* File Upload Mode */}
+            {importMode === 'file' ? (
+              <div className="space-y-3">
+                <div className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center bg-slate-50 transition-colors cursor-pointer relative">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <Upload className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-800">
+                    {uploadFileName ? `Uploaded: ${uploadFileName}` : 'Click or Drag & Drop CSV file here'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Supports .csv files with custom fields
+                  </p>
+                </div>
+
+                {parsedContacts.length > 0 && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                    <p className="font-bold flex items-center gap-1.5 text-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      {parsedContacts.length} Contacts Parsed & Ready for Import
+                    </p>
+                    <p className="text-[10px] font-mono text-emerald-700 truncate">
+                      Detected Columns: {detectedHeaders.join(', ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Paste CSV or JSON Array</label>
+                <textarea
+                  rows={6}
+                  value={csvRaw}
+                  onChange={(e) => setCsvRaw(e.target.value)}
+                  placeholder={`Name,Phone,Email,Company,serviceRequestId,category,pincode,address,details,Tags\nOmkar,919876543210,omkar@example.com,Acme,TKT001,Electrician,411041,"Baner, Pune","Water leakage in kitchen",VIP;Lead`}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-slate-900 text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" loading={importing}>
-                Import Dataset
+              <Button type="submit" loading={importing} icon={Upload}>
+                {parsedContacts.length > 0 ? `Import ${parsedContacts.length} Contacts` : 'Import Contacts Dataset'}
               </Button>
             </div>
           </form>

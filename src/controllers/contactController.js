@@ -296,30 +296,99 @@ export const importContactsCSV = async (req, res) => {
     }
 
     let importedCount = 0;
+    const knownKeys = [
+      'name',
+      'phone',
+      'waId',
+      'email',
+      'companyName',
+      'company',
+      'designation',
+      'city',
+      'state',
+      'country',
+      'source',
+      'tags',
+      'groups',
+      'status',
+      'leadScore',
+      'customFields',
+      '_id',
+    ];
 
     for (const c of contacts) {
       if (!c.name || !c.phone) continue;
       const cleanPhone = String(c.phone).replace(/[^0-9]/g, '');
 
-      await Contact.findOneAndUpdate(
-        { companyId, $or: [{ phone: cleanPhone }, { waId: cleanPhone }] },
-        {
+      // Extract custom fields from object keys that are not standard contact fields
+      const customFieldsObj = {};
+
+      for (const [k, v] of Object.entries(c)) {
+        if (!knownKeys.includes(k) && v !== undefined && v !== null && String(v).trim() !== '') {
+          customFieldsObj[k] = String(v).trim();
+        }
+      }
+
+      if (c.customFields && typeof c.customFields === 'object') {
+        for (const [k, v] of Object.entries(c.customFields)) {
+          if (v !== undefined && v !== null && String(v).trim() !== '') {
+            customFieldsObj[k] = String(v).trim();
+          }
+        }
+      }
+
+      const existingContact = await Contact.findOne({
+        companyId,
+        $or: [{ phone: cleanPhone }, { waId: cleanPhone }],
+      });
+
+      if (existingContact) {
+        // Merge custom fields
+        const existingMap = existingContact.customFields || new Map();
+        for (const [k, v] of Object.entries(customFieldsObj)) {
+          if (typeof existingMap.set === 'function') {
+            existingMap.set(k, v);
+          } else {
+            existingMap[k] = v;
+          }
+        }
+
+        existingContact.name = c.name || existingContact.name;
+        if (c.email) existingContact.email = c.email;
+        if (c.companyName || c.company) existingContact.companyName = c.companyName || c.company;
+        if (c.designation) existingContact.designation = c.designation;
+        if (c.city) existingContact.city = c.city;
+        if (c.state) existingContact.state = c.state;
+        if (c.country) existingContact.country = c.country;
+        if (c.tags) {
+          const newTags = Array.isArray(c.tags) ? c.tags : [c.tags];
+          existingContact.tags = Array.from(new Set([...(existingContact.tags || []), ...newTags]));
+        }
+        existingContact.customFields = existingMap;
+        await existingContact.save();
+      } else {
+        await Contact.create({
           companyId,
           waId: cleanPhone,
           phone: cleanPhone,
           name: c.name,
           email: c.email || '',
           companyName: c.companyName || c.company || '',
+          designation: c.designation || '',
           city: c.city || '',
+          state: c.state || '',
+          country: c.country || '',
           tags: Array.isArray(c.tags) ? c.tags : c.tags ? [c.tags] : ['Lead'],
           status: 'active',
-        },
-        { upsert: true, new: true }
-      );
+          source: c.source || 'CSV Import',
+          createdBy: req.user?._id || null,
+          customFields: customFieldsObj,
+        });
+      }
       importedCount++;
     }
 
-    return successResponse(res, { count: importedCount }, `Successfully imported ${importedCount} contacts`);
+    return successResponse(res, { count: importedCount }, `Successfully imported ${importedCount} contacts with custom fields`);
   } catch (error) {
     console.error('Import CSV Error:', error);
     return errorResponse(res, 'Failed to import contacts from CSV', 500);
