@@ -92,8 +92,18 @@ export const getConversationThread = async (req, res) => {
       $or: [{ waId: conversation.waId }, { customerPhone: conversation.customerPhone }],
     });
 
-    const messages = await Message.find({ conversationId: id, companyId })
-      .sort({ createdAt: 1 });
+    const { before, limit = 50 } = req.query;
+    const msgQuery = { conversationId: id, companyId };
+    if (before) {
+      msgQuery._id = { $lt: before };
+    }
+
+    const messages = await Message.find(msgQuery)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    // Sort ascending for UI thread display
+    messages.reverse();
 
     return successResponse(res, {
       conversation,
@@ -113,6 +123,7 @@ export const getConversationThread = async (req, res) => {
             conversationCount,
           },
       messages,
+      hasMore: messages.length === parseInt(limit),
     });
   } catch (error) {
     console.error('Get Conversation Thread Error:', error);
@@ -234,5 +245,23 @@ export const deleteConversation = async (req, res) => {
     return successResponse(res, null, 'Conversation deleted successfully');
   } catch (error) {
     return errorResponse(res, 'Failed to delete conversation', 500);
+  }
+};
+
+export const markAsUnread = async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.query;
+    const conversation = await Conversation.findOne({ _id: id, companyId: req.company._id });
+    if (!conversation) {
+      return errorResponse(res, 'Conversation not found', 404);
+    }
+
+    conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+    await conversation.save();
+
+    return successResponse(res, conversation, 'Conversation marked as unread');
+  } catch (error) {
+    return errorResponse(res, 'Failed to mark conversation as unread', 500);
   }
 };

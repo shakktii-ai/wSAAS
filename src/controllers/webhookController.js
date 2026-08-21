@@ -10,6 +10,7 @@ import CampaignButtonClick from '@/models/CampaignButtonClick';
 import { triggerChatbotEngine } from '@/lib/chatbotEngine';
 import { triggerAutomationEngine } from '@/lib/automationEngine';
 import { socketService } from '@/lib/socketService';
+import { inboxEvents } from '@/lib/inboxEvents';
 import { logWhatsAppTrace, logWhatsAppError } from '@/lib/whatsappTraceLogger';
 
 /**
@@ -128,6 +129,14 @@ export const handleWebhookEvent = async (req, res) => {
         if (updatedMsg && company) {
           socketService.broadcastToCompany(company._id.toString(), 'MESSAGE_SENT', updatedMsg);
           socketService.broadcastToCompany(company._id.toString(), 'NEW_MESSAGE_RECEIVED', updatedMsg);
+          inboxEvents.emit('inbox_update', {
+            type: 'STATUS_UPDATE',
+            companyId: company._id.toString(),
+            conversationId: updatedMsg.conversationId?.toString(),
+            messageId: updatedMsg._id?.toString(),
+            status,
+            updatedMsg,
+          });
         }
 
         // ─── Track Campaign Message Statuses (Sent, Delivered, Read, Failed) ─
@@ -368,31 +377,43 @@ export const handleWebhookEvent = async (req, res) => {
           $or: [{ metaMessageId }, { wamid: metaMessageId }],
         });
 
-        if (!existingMessage) {
-          await Message.create({
+        if (existingMessage) {
+          logWhatsAppTrace({
+            traceId,
+            stage: 'MESSAGE_DUPLICATE_SKIPPED',
             companyId: company._id,
-            conversationId: conversation._id,
-            metaMessageId,
-            wamid: metaMessageId,
-            direction: 'inbound',
-            senderType: 'customer',
-            sender: {
-              name: customerName,
-              type: 'customer',
-            },
-            messageType,
-            type: messageType,
-            messageBody,
-            body: messageBody,
-            mediaUrl,
-            mediaCaption,
-            filename,
-            location: locationData,
-            contactCard: contactCardData,
-            deliveryStatus: 'delivered',
-            status: 'delivered',
-            timestamp: new Date(),
+            phoneNumberId,
+            waId,
+            messageId: metaMessageId,
+            durationMs: Date.now() - webhookStart,
           });
+          return res.status(200).json({ status: 'EVENT_RECEIVED', duplicate: true });
+        }
+
+        const newMessage = await Message.create({
+          companyId: company._id,
+          conversationId: conversation._id,
+          metaMessageId,
+          wamid: metaMessageId,
+          direction: 'inbound',
+          senderType: 'customer',
+          sender: {
+            name: customerName,
+            type: 'customer',
+          },
+          messageType,
+          type: messageType,
+          messageBody,
+          body: messageBody,
+          mediaUrl,
+          mediaCaption,
+          filename,
+          location: locationData,
+          contactCard: contactCardData,
+          deliveryStatus: 'delivered',
+          status: 'delivered',
+          timestamp: new Date(),
+        });
 
           logWhatsAppTrace({
             traceId,
@@ -409,8 +430,17 @@ export const handleWebhookEvent = async (req, res) => {
           conversation.lastMessage = messageBody;
           conversation.lastMessageType = messageType;
           conversation.lastMessageAt = new Date();
+          conversation.lastCustomerMessageAt = new Date();
           conversation.unreadCount = (conversation.unreadCount || 0) + 1;
           await conversation.save();
+
+          inboxEvents.emit('inbox_update', {
+            type: 'NEW_MESSAGE',
+            companyId: company._id.toString(),
+            conversationId: conversation._id.toString(),
+            message: newMessage,
+            conversation,
+          });
 
           // ─── Track Quick Reply / Interactive Button Clicks ────────────────
           const isButtonEvent = messageType === 'button' || messageType === 'interactive' || !!buttonPayloadId;
@@ -548,7 +578,6 @@ export const handleWebhookEvent = async (req, res) => {
             }
           });
           // ──────────────────────────────────────────────────────────────────────────
-        }
 
         currentStage = 'WEBHOOK_COMPLETED';
         await WebhookLog.create({

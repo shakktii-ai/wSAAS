@@ -12,6 +12,7 @@ import {
   resolveWhatsAppCredentials,
 } from '@/lib/metaWhatsAppService';
 import { saveOutboundMessage } from '@/lib/outboundMessageService';
+import { inboxEvents } from '@/lib/inboxEvents';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 export const sendMessage = async (req, res) => {
@@ -104,6 +105,28 @@ export const sendMessage = async (req, res) => {
       conversationId: conversation._id.toString(),
       wabaId,
     };
+
+    // ─── 24-Hour Customer Service Window Protection ─────────────────────────
+    // Meta Cloud API policy requires using an Approved Template message if > 24h
+    // have passed since the customer's last inbound response.
+    if (type !== 'template') {
+      const lastInboundTime =
+        conversation.lastCustomerMessageAt ||
+        (await Message.findOne({ companyId: company._id, conversationId: conversation._id, direction: 'inbound' }).sort({ createdAt: -1 }))?.createdAt;
+
+      const isWithin24Hours = lastInboundTime
+        ? Date.now() - new Date(lastInboundTime).getTime() <= 24 * 60 * 60 * 1000
+        : false;
+
+      if (!isWithin24Hours) {
+        return errorResponse(
+          res,
+          'The 24-hour customer service window has expired. Freeform text/media messages are blocked by Meta policy. Please send an Approved Meta Template message to re-engage this customer.',
+          400,
+          { code: 'WINDOW_EXPIRED', is24HourExpired: true }
+        );
+      }
+    }
 
     // Execute Meta Cloud API call based on message type
     switch (type) {
@@ -208,6 +231,14 @@ export const sendMessage = async (req, res) => {
       wamid,
       metaMessageId: wamid,
       status: 'sent',
+    });
+
+    inboxEvents.emit('inbox_update', {
+      type: 'NEW_MESSAGE',
+      companyId: company._id.toString(),
+      conversationId: conversation._id.toString(),
+      message: newMessage,
+      conversation,
     });
 
     return successResponse(

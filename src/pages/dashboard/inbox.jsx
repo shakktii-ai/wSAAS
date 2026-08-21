@@ -39,6 +39,8 @@ import {
   Layers,
   X,
   Upload,
+  AlertTriangle,
+  LayoutTemplate,
 } from 'lucide-react';
 
 export default function SharedInbox() {
@@ -77,13 +79,168 @@ export default function SharedInbox() {
   const [newTagInput, setNewTagInput] = useState('');
   const [tagsList, setTagsList] = useState([]);
 
+  // Approved Template Selector Modal State
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [approvedTemplates, setApprovedTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateVars, setTemplateVars] = useState({});
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+
+  const fetchApprovedTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const res = await api.get('/templates?status=APPROVED');
+      if (res.success && res.data) {
+        setApprovedTemplates(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load approved templates:', err);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const openTemplateModal = () => {
+    setShowTemplateModal(true);
+    fetchApprovedTemplates();
+  };
+
+  const handleSelectTemplate = (tpl) => {
+    setSelectedTemplate(tpl);
+    const vars = {};
+    if (tpl?.bodyText) {
+      const matches = Array.from(tpl.bodyText.matchAll(/\{\{(\d+)\}\}/g));
+      if (matches && matches.length > 0) {
+        const varIndices = Array.from(new Set(matches.map((m) => parseInt(m[1], 10)))).sort((a, b) => a - b);
+        varIndices.forEach((idx) => {
+          vars[idx] = '';
+        });
+      }
+    }
+    setTemplateVars(vars);
+  };
+
+  const handleSendTemplateMsg = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedConversation || !selectedTemplate) return;
+
+    setSendingTemplate(true);
+    const targetPhone = selectedConversation.waId || selectedConversation.customerPhone;
+
+    try {
+      const components = [];
+      const varKeys = Object.keys(templateVars);
+      if (varKeys.length > 0) {
+        const bodyParams = varKeys.map((k) => ({
+          type: 'text',
+          text: templateVars[k] || '',
+        }));
+        components.push({
+          type: 'body',
+          parameters: bodyParams,
+        });
+      }
+
+      const res = await api.post('/whatsapp/send', {
+        to: targetPhone,
+        conversationId: selectedConversation._id,
+        type: 'template',
+        templateName: selectedTemplate.name,
+        languageCode: selectedTemplate.language || 'en_US',
+        components,
+      });
+
+      if (res.success && res.data) {
+        setShowTemplateModal(false);
+        setSelectedTemplate(null);
+        setTemplateVars({});
+        loadThread(selectedConversation);
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to send WhatsApp template message');
+    } finally {
+      setSendingTemplate(false);
+    }
+  };
+
+  const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const [hasNewUnreadBelow, setHasNewUnreadBelow] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [retryingMsgId, setRetryingMsgId] = useState(null);
+
+  const loadOlderMessages = async () => {
+    if (loadingOlder || !hasMoreMessages || !messages.length || !selectedConversation) return;
+    const firstMsg = messages[0];
+    if (!firstMsg || !firstMsg._id) return;
+
+    setLoadingOlder(true);
+    const container = messagesContainerRef.current;
+    const oldScrollHeight = container ? container.scrollHeight : 0;
+
+    try {
+      const res = await api.get(`/inbox/conversations/${selectedConversation._id}?before=${firstMsg._id}`);
+      if (res.success && res.data && res.data.messages) {
+        const olderMsgs = res.data.messages;
+        if (olderMsgs.length > 0) {
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m._id));
+            const uniqueOlder = olderMsgs.filter((m) => !existingIds.has(m._id));
+            return [...uniqueOlder, ...prev];
+          });
+          setHasMoreMessages(res.data.hasMore || false);
+
+          requestAnimationFrame(() => {
+            if (container) {
+              container.scrollTop = container.scrollHeight - oldScrollHeight;
+            }
+          });
+        } else {
+          setHasMoreMessages(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleContainerScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    isNearBottomRef.current = isAtBottom;
+    if (isAtBottom) {
+      setHasNewUnreadBelow(false);
+    }
+
+    if (el.scrollTop === 0 && hasMoreMessages && !loadingOlder) {
+      loadOlderMessages();
+    }
+  };
+
+  const scrollToBottom = (smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+      setHasNewUnreadBelow(false);
+      isNearBottomRef.current = true;
+    }
+  };
 
   const fetchConversations = async () => {
     try {
-      const res = await api.get(`/inbox/conversations?status=${statusFilter}&search=${search}`);
+      const filterParam = statusFilter === 'unread' ? 'all' : statusFilter;
+      const res = await api.get(`/inbox/conversations?status=${filterParam}&search=${search}`);
       if (res.success && res.data) {
-        setConversations(res.data.conversations || res.data);
+        let list = res.data.conversations || res.data;
+        if (statusFilter === 'unread') {
+          list = list.filter((c) => c.unreadCount > 0);
+        }
+        setConversations(list);
       }
     } catch (err) {
       console.error(err);
@@ -111,10 +268,42 @@ export default function SharedInbox() {
         setCustomerProfile(res.data.contact);
         setTagsList(res.data.conversation.tags || []);
         setMessages(res.data.messages);
+        setHasMoreMessages(res.data.hasMore || false);
+        setHasNewUnreadBelow(false);
+        isNearBottomRef.current = true;
         fetchConversations();
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleMarkAsUnread = async () => {
+    if (!selectedConversation) return;
+    try {
+      const res = await api.put(`/inbox/conversations/${selectedConversation._id}/unread`);
+      if (res.success) {
+        setSelectedConversation(null);
+        fetchConversations();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to mark conversation as unread');
+    }
+  };
+
+  const handleRetryMessage = async (msgId) => {
+    setRetryingMsgId(msgId);
+    try {
+      const res = await api.post('/whatsapp/retry', { messageId: msgId });
+      if (res.success && res.data) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === msgId ? { ...m, ...res.data.message, status: 'sent', deliveryStatus: 'sent' } : m))
+        );
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to retry message');
+    } finally {
+      setRetryingMsgId(null);
     }
   };
 
@@ -127,7 +316,46 @@ export default function SharedInbox() {
     fetchConversations();
     fetchTeamAgents();
 
-    // SSE / Real-time Live Polling Engine (every 3 seconds)
+    // ── Real-time SSE Gateway Stream ─────────────────────────────────────────
+    let eventSource;
+    try {
+      eventSource = new EventSource('/api/inbox/stream');
+      eventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'NEW_MESSAGE') {
+            fetchConversations();
+            if (selectedConvRef.current?._id === data.conversationId) {
+              setMessages((prev) => {
+                const exists = prev.some((m) => m._id === data.message?._id || (m.wamid && m.wamid === data.message?.wamid));
+                if (exists) return prev;
+                return [...prev, data.message];
+              });
+              if (!isNearBottomRef.current) {
+                setHasNewUnreadBelow(true);
+              }
+            }
+          } else if (data.type === 'STATUS_UPDATE') {
+            fetchConversations();
+            if (selectedConvRef.current?._id === data.conversationId) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m._id === data.messageId || m.wamid === data.updatedMsg?.wamid || m.metaMessageId === data.updatedMsg?.metaMessageId
+                    ? { ...m, ...data.updatedMsg, deliveryStatus: data.status, status: data.status }
+                    : m
+                )
+              );
+            }
+          }
+        } catch (err) {
+          console.error('SSE Message Parse Error:', err);
+        }
+      };
+    } catch (err) {
+      console.error('SSE Connection Error:', err);
+    }
+
+    // ── Polling Fallback (5 seconds) ──────────────────────────────────────────
     const interval = setInterval(() => {
       fetchConversations();
       if (selectedConvRef.current?._id) {
@@ -137,13 +365,18 @@ export default function SharedInbox() {
           }
         });
       }
-    }, 3000);
+    }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (eventSource) eventSource.close();
+      clearInterval(interval);
+    };
   }, [statusFilter, search]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      scrollToBottom(true);
+    }
   }, [messages]);
 
   const handleSendMessage = async (e, customType = 'text', customPayload = {}) => {
@@ -304,6 +537,14 @@ export default function SharedInbox() {
                   Open
                 </button>
                 <button
+                  onClick={() => setStatusFilter('unread')}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    statusFilter === 'unread' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Unread
+                </button>
+                <button
                   onClick={() => setStatusFilter('closed')}
                   className={`px-2 py-0.5 rounded font-bold transition-colors ${
                     statusFilter === 'closed' ? 'bg-slate-200 text-slate-900' : 'text-slate-600 hover:text-slate-900'
@@ -426,6 +667,15 @@ export default function SharedInbox() {
                     {selectedConversation.status === 'closed' ? 'Reopen Chat' : 'Close Chat'}
                   </Button>
 
+                  <button
+                    onClick={handleMarkAsUnread}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors text-xs font-semibold flex items-center gap-1 shadow-xs"
+                    title="Mark conversation as unread"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    Mark Unread
+                  </button>
+
                   <select
                     value={selectedConversation.assignedAgent?._id || selectedConversation.assignedAgentId?._id || ''}
                     onChange={(e) => handleAssignAgent(e.target.value)}
@@ -454,7 +704,11 @@ export default function SharedInbox() {
               </div>
 
               {/* Chat Message History */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/70 scrollbar-thin">
+              <div
+                ref={messagesContainerRef}
+                onScroll={handleContainerScroll}
+                className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/70 scrollbar-thin relative"
+              >
                 {messages.map((msg, index) => {
                   const isOutbound = msg.direction === 'outbound' || msg.senderType === 'agent';
                   const mType = msg.messageType || msg.type || 'text';
@@ -496,6 +750,18 @@ export default function SharedInbox() {
                             </div>
                           )}
 
+                          {mType === 'video' && msg.mediaUrl && (
+                            <div className="mb-2">
+                              <video src={msg.mediaUrl} controls className="rounded-lg max-h-48 object-cover w-full" />
+                            </div>
+                          )}
+
+                          {mType === 'audio' && msg.mediaUrl && (
+                            <div className="mb-2">
+                              <audio src={msg.mediaUrl} controls className="w-full mt-1" />
+                            </div>
+                          )}
+
                           {mType === 'document' && msg.mediaUrl && (
                             <a
                               href={msg.mediaUrl}
@@ -528,20 +794,36 @@ export default function SharedInbox() {
 
                           {mBody && <p className="whitespace-pre-wrap leading-relaxed font-normal">{mBody}</p>}
 
-                          <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          <div className={`flex items-center justify-end gap-1.5 mt-1 text-[9px] ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
                             <span>
                               {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isOutbound && (
-                              <span>
+                              <span className="flex items-center gap-1">
                                 {mStatus === 'read' ? (
-                                  <CheckCheck className="w-3 h-3 text-white" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-sky-300" title="Read" />
                                 ) : mStatus === 'delivered' ? (
-                                  <CheckCheck className="w-3 h-3 text-emerald-200" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-emerald-200" title="Delivered" />
                                 ) : mStatus === 'failed' ? (
-                                  <XCircle className="w-3 h-3 text-rose-300" />
+                                  <span className="flex items-center gap-1">
+                                    <span title={msg.errorDetails?.message || (typeof msg.errorDetails === 'string' ? msg.errorDetails : 'Delivery Failed')}>
+                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-300" />
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRetryMessage(msg._id)}
+                                      disabled={retryingMsgId === msg._id}
+                                      className="px-1.5 py-0.5 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold text-[9px] flex items-center gap-1 transition-colors shadow-xs"
+                                      title="Retry sending failed message"
+                                    >
+                                      <RotateCcw className={`w-2.5 h-2.5 ${retryingMsgId === msg._id ? 'animate-spin' : ''}`} />
+                                      Retry
+                                    </button>
+                                  </span>
+                                ) : mStatus === 'sent' ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-200" title="Sent" />
                                 ) : (
-                                  <Check className="w-3 h-3 text-emerald-200" />
+                                  <Clock className="w-3.5 h-3.5 text-emerald-200 animate-spin" title="Sending..." />
                                 )}
                               </span>
                             )}
@@ -560,6 +842,17 @@ export default function SharedInbox() {
                 })}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Floating New Messages Indicator Button */}
+              {hasNewUnreadBelow && (
+                <button
+                  type="button"
+                  onClick={() => scrollToBottom(true)}
+                  className="absolute bottom-20 right-6 z-20 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-full shadow-lg transition-all flex items-center gap-1.5 animate-bounce cursor-pointer"
+                >
+                  👇 New messages below
+                </button>
+              )}
 
               {/* Attachment Drawer Popover */}
               {showAttachmentMenu && (
@@ -605,28 +898,77 @@ export default function SharedInbox() {
                 </div>
               )}
 
-              {/* Reply Input Bar */}
-              <form onSubmit={(e) => handleSendMessage(e, 'text')} className="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
+              {/* 24-Hour Customer Service Window Protection Warning Banner */}
+              {(() => {
+                const lastInboundTime =
+                  selectedConversation?.lastCustomerMessageAt ||
+                  messages.filter((m) => m.direction === 'inbound' || m.senderType === 'customer' || m.sender?.type === 'customer').slice(-1)[0]?.createdAt ||
+                  messages.filter((m) => m.direction === 'inbound' || m.senderType === 'customer' || m.sender?.type === 'customer').slice(-1)[0]?.timestamp;
 
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Type WhatsApp message..."
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600"
-                />
+                const is24hExpired = selectedConversation
+                  ? !lastInboundTime || Date.now() - new Date(lastInboundTime).getTime() > 24 * 60 * 60 * 1000
+                  : false;
 
-                <Button type="submit" loading={sendingMsg} icon={Send} size="sm">
-                  Send
-                </Button>
-              </form>
+                return (
+                  <>
+                    {is24hExpired && (
+                      <div className="px-4 py-3 bg-amber-50 border-t border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-3 z-10">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <div>
+                            <p className="font-bold text-amber-900">24-Hour Customer Service Window Expired</p>
+                            <p className="text-[11px] text-amber-700">
+                              Meta policy blocks freeform replies. Send an Approved Meta Template to re-engage this customer.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-xs transition-colors flex items-center gap-1.5 text-xs flex-shrink-0"
+                        >
+                          <LayoutTemplate className="w-3.5 h-3.5" /> Send Template
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Reply Input Bar */}
+                    <form onSubmit={(e) => handleSendMessage(e, 'text')} className="p-3 border-t border-slate-200 bg-white flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={is24hExpired}
+                        onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                        className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                      </button>
+
+                      <input
+                        type="text"
+                        disabled={is24hExpired}
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder={is24hExpired ? "24h window expired. Use 'Send Template' button..." : "Type WhatsApp message..."}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                      />
+
+                      {is24hExpired ? (
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+                        >
+                          <LayoutTemplate className="w-3.5 h-3.5" /> Template
+                        </button>
+                      ) : (
+                        <Button type="submit" loading={sendingMsg} icon={Send} size="sm">
+                          Send
+                        </Button>
+                      )}
+                    </form>
+                  </>
+                );
+              })()}
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
@@ -821,6 +1163,91 @@ export default function SharedInbox() {
           </div>
         </form>
       </Modal>
+
+      {/* Send Approved WhatsApp Template Modal */}
+      {showTemplateModal && (
+        <Modal isOpen={showTemplateModal} onClose={() => setShowTemplateModal(false)} title="Send Approved WhatsApp Template">
+          <div className="space-y-4 text-xs">
+            {loadingTemplates ? (
+              <div className="p-6 text-center text-slate-400">Loading approved templates...</div>
+            ) : approvedTemplates.length === 0 ? (
+              <div className="p-4 text-center text-slate-400 bg-slate-900 rounded-xl border border-slate-800">
+                No approved WhatsApp templates found. Create & sync templates under Dashboard → Templates.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Select Approved Template *</label>
+                  <select
+                    value={selectedTemplate?._id || ''}
+                    onChange={(e) => {
+                      const found = approvedTemplates.find((t) => t._id === e.target.value);
+                      if (found) handleSelectTemplate(found);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-medium focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- Choose Approved Template --</option>
+                    {approvedTemplates.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.name} ({t.category} - {t.language})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedTemplate && (
+                  <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Template Name</p>
+                      <p className="font-mono font-bold text-emerald-400">{selectedTemplate.name}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Message Body</p>
+                      <div className="p-2.5 bg-slate-950 text-slate-200 rounded-lg text-xs leading-relaxed font-normal whitespace-pre-wrap mt-1 border border-slate-800">
+                        {selectedTemplate.bodyText || '[No Body Text]'}
+                      </div>
+                    </div>
+
+                    {Object.keys(templateVars).length > 0 && (
+                      <div className="space-y-2 border-t border-slate-800 pt-2">
+                        <p className="text-[11px] font-bold text-slate-300">Template Variable Values:</p>
+                        {Object.keys(templateVars).map((varIdx) => (
+                          <div key={varIdx} className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono font-bold text-emerald-400 w-12">{'{{' + varIdx + '}}'}:</span>
+                            <input
+                              type="text"
+                              value={templateVars[varIdx]}
+                              onChange={(e) => setTemplateVars({ ...templateVars, [varIdx]: e.target.value })}
+                              placeholder={`Value for {{${varIdx}}}`}
+                              className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                  <Button variant="secondary" type="button" onClick={() => setShowTemplateModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!selectedTemplate || sendingTemplate}
+                    loading={sendingTemplate}
+                    onClick={handleSendTemplateMsg}
+                    icon={Send}
+                  >
+                    Send Template Message
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
     </DashboardLayout>
   );
 }

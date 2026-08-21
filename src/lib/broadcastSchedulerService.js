@@ -227,7 +227,22 @@ export async function executeBroadcastCore(broadcast, company, actor = null) {
     }
 
     try {
-      const cleanPhone = contact.phone.replace(/[^0-9]/g, '');
+      const cleanPhone = (contact.phone || '').replace(/[^0-9]/g, '');
+
+      // Safe Meta E.164 Phone Number Validation (7 to 15 digits)
+      if (!cleanPhone || cleanPhone.length < 7 || cleanPhone.length > 15) {
+        failed++;
+        await CampaignRecipient.create({
+          broadcastId: broadcast._id,
+          companyId: company._id,
+          contactId: contact._id,
+          phone: contact.phone || '',
+          status: 'FAILED',
+          failedReason: 'Invalid E.164 phone number format',
+          errorCode: 'INVALID_PHONE_NUMBER',
+        });
+        continue;
+      }
 
       // Find or create conversation
       let conversation = await Conversation.findOne({ companyId: company._id, customerPhone: cleanPhone });

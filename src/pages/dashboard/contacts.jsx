@@ -29,6 +29,7 @@ import {
   CheckSquare,
   Square,
   MessageCircle,
+  Layers,
 } from 'lucide-react';
 
 export default function ContactsManager() {
@@ -51,6 +52,68 @@ export default function ContactsManager() {
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isGroupOpen, setIsGroupOpen] = useState(false);
+
+  // Contact Groups State
+  const [contactGroups, setContactGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [submittingGroup, setSubmittingGroup] = useState(false);
+
+  const fetchContactGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await api.get('/contacts/groups');
+      if (res.success && res.data) {
+        setContactGroups(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load contact groups:', err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  const openGroupModal = () => {
+    setIsGroupOpen(true);
+    fetchContactGroups();
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+
+    setSubmittingGroup(true);
+    try {
+      const res = await api.post('/contacts/groups', {
+        name: newGroupName,
+        description: newGroupDesc,
+      });
+
+      if (res.success) {
+        setNewGroupName('');
+        setNewGroupDesc('');
+        fetchContactGroups();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to create group');
+    } finally {
+      setSubmittingGroup(false);
+    }
+  };
+
+  const handleDeleteGroup = async (id) => {
+    if (!confirm('Are you sure you want to delete this contact group?')) return;
+    try {
+      const res = await api.delete(`/contacts/groups/${id}`);
+      if (res.success) {
+        fetchContactGroups();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to delete group');
+    }
+  };
 
   // Add Contact Form State
   const [name, setName] = useState('');
@@ -447,6 +510,9 @@ export default function ContactsManager() {
             <Button variant="secondary" icon={Download} onClick={handleExportCSV}>
               Export CSV
             </Button>
+            <Button variant="secondary" icon={Layers} onClick={openGroupModal}>
+              Contact Groups
+            </Button>
             <Button icon={UserPlus} onClick={() => setIsAddOpen(true)}>
               Add Contact
             </Button>
@@ -538,7 +604,8 @@ export default function ContactsManager() {
                 className="bg-slate-50 border border-slate-200 text-slate-900 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-600 font-medium"
               >
                 <option value="all">All Statuses</option>
-                <option value="active">Active</option>
+                <option value="active">Active (Opted-In)</option>
+                <option value="unsubscribed">Unsubscribed (Opted-Out)</option>
                 <option value="blocked">Blocked</option>
                 <option value="archived">Archived</option>
               </select>
@@ -662,7 +729,7 @@ export default function ContactsManager() {
 
                 <div className="flex flex-wrap gap-1">{inspectorContact.tags?.map((t) => getTagBadge(t))}</div>
 
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1 text-[11px] text-slate-400">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5 text-[11px] text-slate-400">
                   <p className="flex justify-between">
                     <span>Company:</span> <strong className="text-slate-200">{inspectorContact.companyName || '-'}</strong>
                   </p>
@@ -672,6 +739,38 @@ export default function ContactsManager() {
                   <p className="flex justify-between">
                     <span>Lead Score:</span> <strong className="text-emerald-400">{inspectorContact.leadScore || 50} pts</strong>
                   </p>
+                  <p className="flex justify-between items-center pt-1 border-t border-slate-800">
+                    <span>Opt-In Status:</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                        inspectorContact.status === 'unsubscribed'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : inspectorContact.status === 'blocked'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {inspectorContact.status === 'unsubscribed' ? 'Opted Out' : inspectorContact.status === 'active' ? 'Opted In' : inspectorContact.status}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const newStatus = inspectorContact.status === 'unsubscribed' ? 'active' : 'unsubscribed';
+                      try {
+                        const res = await api.put(`/contacts/${inspectorContact._id}`, { status: newStatus });
+                        if (res.success && res.data) {
+                          setInspectorContact(res.data);
+                          fetchContacts();
+                        }
+                      } catch (err) {
+                        alert(err.message || 'Failed to update opt-in status');
+                      }
+                    }}
+                    className="w-full mt-2 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {inspectorContact.status === 'unsubscribed' ? '✅ Switch to Opted In' : '🚫 Mark as Opted Out'}
+                  </button>
                 </div>
 
                 <div>
@@ -906,6 +1005,73 @@ export default function ContactsManager() {
             </div>
           </form>
         </Modal>
+
+        {/* Contact Group Builder Modal */}
+        {isGroupOpen && (
+          <Modal isOpen={isGroupOpen} onClose={() => setIsGroupOpen(false)} title="Contact Group Builder">
+            <div className="space-y-4 text-xs">
+              <form onSubmit={handleCreateGroup} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 shadow-xs">
+                <h4 className="font-bold text-slate-800 text-xs">Create New Audience Group</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Group Name (e.g. VIP Customers)"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Description (Optional)"
+                    value={newGroupDesc}
+                    onChange={(e) => setNewGroupDesc(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" type="submit" loading={submittingGroup}>
+                    Create Group
+                  </Button>
+                </div>
+              </form>
+
+              <div>
+                <h4 className="font-bold text-slate-800 text-xs mb-2">Existing Saved Groups</h4>
+                {loadingGroups ? (
+                  <p className="text-slate-500 py-4 text-center">Loading groups...</p>
+                ) : contactGroups.length === 0 ? (
+                  <p className="text-slate-500 py-4 text-center bg-slate-50 rounded-xl border border-slate-200">
+                    No contact groups created yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin">
+                    {contactGroups.map((g) => (
+                      <div key={g._id} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
+                        <div>
+                          <p className="font-bold text-slate-900">{g.name}</p>
+                          {g.description && <p className="text-[11px] text-slate-500">{g.description}</p>}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-[10px] border border-emerald-200/60">
+                            {g.contactCount || 0} Contacts
+                          </span>
+                          <button
+                            onClick={() => handleDeleteGroup(g._id)}
+                            className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                            title="Delete Group"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )}
       </div>
     </DashboardLayout>
   );

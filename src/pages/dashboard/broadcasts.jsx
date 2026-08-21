@@ -305,10 +305,24 @@ export default function BroadcastsManager() {
     }
   }, []);
 
+  const [contactGroups, setContactGroups] = useState([]);
+
+  const fetchContactGroups = useCallback(async () => {
+    try {
+      const res = await api.get('/contacts/groups');
+      if (res.success && res.data) {
+        setContactGroups(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchBroadcasts();
     fetchTemplates();
-  }, [fetchBroadcasts, fetchTemplates]);
+    fetchContactGroups();
+  }, [fetchBroadcasts, fetchTemplates, fetchContactGroups]);
 
   // ── Create ───────────────────────────────────────────────────────────────
 
@@ -409,7 +423,12 @@ export default function BroadcastsManager() {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   const handleExecuteBroadcast = async (id) => {
-    if (!confirm('Dispatch broadcast campaign to target WhatsApp contacts now?')) return;
+    if (actionLoadingId === id) return;
+    setActionLoadingId(id);
+    if (!confirm('Dispatch broadcast campaign to target WhatsApp contacts now?')) {
+      setActionLoadingId(null);
+      return;
+    }
     try {
       const res = await api.post(`/broadcasts/${id}/execute`);
       if (res.success) {
@@ -418,34 +437,48 @@ export default function BroadcastsManager() {
       }
     } catch (err) {
       alert(err.message || 'Broadcast execution failed');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleCancelBroadcast = async (id, name) => {
+    if (actionLoadingId === id) return;
     if (!confirm(`Cancel scheduled campaign "${name}"? This cannot be undone.`)) return;
+    setActionLoadingId(id);
     try {
       const res = await api.post(`/broadcasts/${id}/cancel`);
       if (res.success) fetchBroadcasts();
     } catch (err) {
       alert(err.message || 'Failed to cancel campaign');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handlePauseBroadcast = async (id) => {
+    if (actionLoadingId === id) return;
+    setActionLoadingId(id);
     try {
       const res = await api.post(`/broadcasts/${id}/pause`);
       if (res.success) fetchBroadcasts();
     } catch (err) {
       alert(err.message);
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleResumeBroadcast = async (id) => {
+    if (actionLoadingId === id) return;
+    setActionLoadingId(id);
     try {
       const res = await api.post(`/broadcasts/${id}/resume`);
       if (res.success) fetchBroadcasts();
     } catch (err) {
       alert(err.message);
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -500,7 +533,7 @@ export default function BroadcastsManager() {
 
   const RowActions = ({ b }) => {
     const canDispatch = ['DRAFT', 'SCHEDULED'].includes(b.status) && !['PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(b.status);
-    const canCancel   = ['DRAFT', 'SCHEDULED'].includes(b.status);
+    const canCancel   = ['DRAFT', 'SCHEDULED', 'PROCESSING', 'PAUSED'].includes(b.status);
 
     return (
       <div className="flex items-center justify-end gap-1">
@@ -957,16 +990,32 @@ export default function BroadcastsManager() {
                   <option value="tag">Specific Tag</option>
                 </select>
               </div>
-              {targetType !== 'all' && (
+              {targetType === 'group' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    {targetType === 'group' ? 'Group Name' : 'Tag Name'}
-                  </label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Contact Group *</label>
+                  <select
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  >
+                    <option value="">-- Choose Contact Group --</option>
+                    {contactGroups.map((g) => (
+                      <option key={g._id} value={g.name}>
+                        {g.name} ({g.contactCount || 0} contacts)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {targetType === 'tag' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Tag Name *</label>
                   <input
                     type="text"
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
-                    placeholder={targetType === 'group' ? 'VIP Customers' : 'leads'}
+                    placeholder="e.g. VIP or Lead"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white"
                   />
                 </div>

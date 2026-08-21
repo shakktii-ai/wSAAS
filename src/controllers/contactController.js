@@ -3,6 +3,7 @@ import Contact from '@/models/Contact';
 import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
 import User from '@/models/User';
+import ContactGroup from '@/models/ContactGroup';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 
 /**
@@ -428,5 +429,77 @@ export const deleteContact = async (req, res) => {
     return successResponse(res, null, 'Contact deleted');
   } catch (error) {
     return errorResponse(res, 'Failed to delete contact', 500);
+  }
+};
+
+/**
+ * GET /api/contacts/groups - List Contact Groups
+ */
+export const getContactGroups = async (req, res) => {
+  try {
+    await connectDB();
+    const companyId = req.company._id;
+    const groups = await ContactGroup.find({ companyId }).sort({ createdAt: -1 });
+
+    const groupsWithCount = await Promise.all(
+      groups.map(async (g) => {
+        const count = await Contact.countDocuments({ companyId, groups: g.name });
+        return {
+          ...g.toObject(),
+          contactCount: count,
+        };
+      })
+    );
+
+    return successResponse(res, groupsWithCount);
+  } catch (error) {
+    return errorResponse(res, 'Failed to fetch contact groups', 500);
+  }
+};
+
+/**
+ * POST /api/contacts/groups - Create Contact Group
+ */
+export const createContactGroup = async (req, res) => {
+  try {
+    await connectDB();
+    const { name, description } = req.body;
+    const companyId = req.company._id;
+
+    if (!name) {
+      return errorResponse(res, 'Group name is required', 400);
+    }
+
+    const existing = await ContactGroup.findOne({ companyId, name: name.trim() });
+    if (existing) {
+      return errorResponse(res, 'A group with this name already exists', 400);
+    }
+
+    const group = await ContactGroup.create({
+      companyId,
+      name: name.trim(),
+      description: description || '',
+      contactCount: 0,
+    });
+
+    return successResponse(res, group, 'Contact group created', 201);
+  } catch (error) {
+    return errorResponse(res, error.message || 'Failed to create contact group', 500);
+  }
+};
+
+/**
+ * DELETE /api/contacts/groups/[id] - Delete Contact Group
+ */
+export const deleteContactGroup = async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.query;
+    const companyId = req.company._id;
+
+    await ContactGroup.findOneAndDelete({ _id: id, companyId });
+    return successResponse(res, null, 'Contact group deleted');
+  } catch (error) {
+    return errorResponse(res, 'Failed to delete contact group', 500);
   }
 };

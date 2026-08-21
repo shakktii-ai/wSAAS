@@ -47,6 +47,10 @@ const ConversationSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    lastCustomerMessageAt: {
+      type: Date,
+      default: null,
+    },
     unreadCount: {
       type: Number,
       default: 0,
@@ -90,5 +94,8 @@ const ConversationSchema = new mongoose.Schema(
 );
 
 ConversationSchema.index({ companyId: 1, waId: 1 }, { unique: true });
+ConversationSchema.index({ companyId: 1, lastMessageAt: -1 });
+ConversationSchema.index({ companyId: 1, customerName: 1 });
+ConversationSchema.index({ companyId: 1, customerPhone: 1 });
 
 export default mongoose.models.Conversation || mongoose.model('Conversation', ConversationSchema);

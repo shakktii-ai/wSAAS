@@ -125,6 +125,8 @@ const MessageSchema = new mongoose.Schema(
   }
 );
 
-MessageSchema.index({ companyId: 1, conversationId: 1, createdAt: 1 });
+MessageSchema.index({ companyId: 1, conversationId: 1, createdAt: -1 });
+MessageSchema.index({ companyId: 1, wamid: 1 });
+MessageSchema.index({ companyId: 1, metaMessageId: 1 });
 
 export default mongoose.models.Message || mongoose.model('Message', MessageSchema);
