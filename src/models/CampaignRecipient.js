@@ -22,11 +22,29 @@ const CampaignRecipientSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    idempotencyKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     status: {
       type: String,
-      enum: ['queued', 'sent', 'delivered', 'read', 'failed'],
-      default: 'queued',
+      enum: ['queued', 'pending', 'sending', 'sent', 'delivered', 'read', 'failed', 'sending_unknown', 'cancelled'],
+      default: 'pending',
       index: true,
+    },
+    sendingLockedAt: {
+      type: Date,
+      default: null,
+    },
+    workerId: {
+      type: String,
+      default: null,
+    },
+    attemptCount: {
+      type: Number,
+      default: 0,
     },
     metaMessageId: String,
     errorMessage:  String,
@@ -35,11 +53,6 @@ const CampaignRecipientSchema = new mongoose.Schema(
     readAt:        Date,
 
     // ── Click tracking fields ─────────────────────────────────────────────────
-    /**
-     * The trackingId used to build the click-tracking redirect URL sent to
-     * this recipient. Stored so clicks can be correlated back to a specific
-     * contact without re-querying CampaignClick.
-     */
     trackingId: {
       type: String,
       default: '',
@@ -73,6 +86,7 @@ const CampaignRecipientSchema = new mongoose.Schema(
 );
 
 CampaignRecipientSchema.index({ companyId: 1, broadcastId: 1, status: 1 });
-CampaignRecipientSchema.index({ trackingId: 1 });
+CampaignRecipientSchema.index({ broadcastId: 1, contactId: 1 });
+CampaignRecipientSchema.index({ status: 1, sendingLockedAt: 1 });
 
 export default mongoose.models.CampaignRecipient || mongoose.model('CampaignRecipient', CampaignRecipientSchema);

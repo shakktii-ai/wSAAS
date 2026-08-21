@@ -12,7 +12,7 @@
 # Production Environment Variables & Tokens (DO NOT COMMIT SECRETS)
 .env
 .env*.local
-.env.example
+#.env.example
 
 # Debug Logs & Temp Files
 npm-debug.log*

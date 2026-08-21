@@ -419,15 +419,9 @@ export async function runScheduledBroadcasts() {
   const lockExpiry = new Date(now.getTime() - LOCK_TIMEOUT_MS);
 
   const results = { processed: 0, succeeded: 0, failed: 0, skipped: 0 };
+  const { publishKafkaJob, KAFKA_TOPICS } = await import('@/lib/kafkaProducer');
 
   for (let i = 0; i < MAX_PER_RUN; i++) {
-    /**
-     * Atomic claim: only one server instance can match this update.
-     * Conditions:
-     *   - status = SCHEDULED
-     *   - scheduledAt is in the past
-     *   - lockedAt is null OR stale (> 10 min ago — guards against crashed workers)
-     */
     const broadcast = await Broadcast.findOneAndUpdate(
       {
         status:      'SCHEDULED',
@@ -446,30 +440,35 @@ export async function runScheduledBroadcasts() {
       },
       {
         new:  true,
-        sort: { scheduledAt: 1 }, // oldest due first
+        sort: { scheduledAt: 1 },
       }
     );
 
-    if (!broadcast) break; // no more due campaigns
+    if (!broadcast) break;
 
     results.processed++;
 
     try {
-      // Load the owning company
       const company = await Company.findById(broadcast.companyId);
       if (!company || company.status !== 'active') {
         throw new Error(`Company ${broadcast.companyId} not found or inactive`);
       }
 
-      const { sent, failed, total } = await executeBroadcastCore(broadcast, company, null);
-      await finaliseBroadcast(broadcast, { sent, failed, total });
+      await publishKafkaJob(
+        KAFKA_TOPICS.BROADCASTS,
+        {
+          broadcastId: broadcast._id.toString(),
+          companyId: company._id.toString(),
+          actor: null,
+        },
+        broadcast._id.toString()
+      );
 
-      console.log(`[Cron] Broadcast ${broadcast._id} completed: ${sent}/${total} sent, ${failed} failed`);
+      console.log(`[Cron] Scheduled Broadcast ${broadcast._id} claimed & enqueued to Kafka`);
       results.succeeded++;
     } catch (err) {
-      console.error(`[Cron] Broadcast ${broadcast._id} FAILED:`, err.message);
+      console.error(`[Cron] Scheduled Broadcast ${broadcast._id} enqueue FAILED:`, err.message);
 
-      // Mark as FAILED, store reason, clear lock
       await Broadcast.findByIdAndUpdate(broadcast._id, {
         $set: {
           status:       'FAILED',

@@ -216,19 +216,25 @@ export const executeBroadcast = async (req, res) => {
       return errorResponse(res, 'Campaign not found, already processing, or already completed', 400);
     }
 
-    try {
-      const { sent, failed, total } = await executeBroadcastCore(broadcast, company, req.user);
-      const finalBroadcast = await finaliseBroadcast(broadcast, { sent, failed, total });
-      return successResponse(res, finalBroadcast, `Broadcast dispatched to ${sent} contacts (${failed} failed)`);
-    } catch (execErr) {
-      // Release lock and mark as FAILED
-      await Broadcast.findByIdAndUpdate(broadcast._id, {
-        $set: { status: 'FAILED', lockedAt: null, errorMessage: execErr.message },
-        $inc: { retryCount: 1 },
-      });
-      console.error('[executeBroadcast] Execution failed:', execErr.message);
-      return errorResponse(res, execErr.message || 'Failed to execute broadcast campaign', 500);
-    }
+    const { publishKafkaJob, KAFKA_TOPICS } = await import('@/lib/kafkaProducer');
+
+    // Enqueue Kafka job for asynchronous worker dispatch
+    const publishResult = await publishKafkaJob(
+      KAFKA_TOPICS.BROADCASTS,
+      {
+        broadcastId: broadcast._id.toString(),
+        companyId: company._id.toString(),
+        actor: req.user ? { _id: req.user._id.toString(), name: req.user.name } : null,
+      },
+      broadcast._id.toString()
+    );
+
+    return successResponse(
+      res,
+      broadcast,
+      `Broadcast campaign queued for asynchronous worker processing via ${publishResult.mode}`,
+      202
+    );
   } catch (error) {
     console.error('executeBroadcast Error:', error);
     return errorResponse(res, 'Failed to execute broadcast campaign', 500);
