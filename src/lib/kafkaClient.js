@@ -5,28 +5,89 @@ import EventEmitter from 'events';
 class InProcessFallbackBus extends EventEmitter {}
 export const fallbackBus = new InProcessFallbackBus();
 
-const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
-const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',').map((b) => b.trim()).filter(Boolean);
-const clientId = process.env.KAFKA_CLIENT_ID || 'syncchat-saas';
-
 let kafkaInstance = null;
 let producerInstance = null;
 let isProducerConnected = false;
 
 /**
- * Safely normalizes multiline CA certificate strings passed via environment variables.
- * Handles both literal '\n' characters and real newlines.
+ * Safely normalizes CA certificate strings from environment variables.
+ * Handles:
+ *  - Surrounding quotes ("..." or '...')
+ *  - Escaped newlines ('\n', '\\n', '\r\n')
+ *  - Single-line pasted PEM certs (space-delimited base64 body)
+ *  - Base64-encoded PEM certs
  */
-function normalizeCaCert(rawCert) {
+export function normalizeCaCert(rawCert) {
   if (!rawCert) return null;
   let cert = String(rawCert).trim();
-  if (cert.includes('\\n')) {
-    cert = cert.replace(/\\n/g, '\n');
+
+  // Strip leading/trailing quotes if user pasted with quotes
+  if ((cert.startsWith('"') && cert.endsWith('"')) || (cert.startsWith("'") && cert.endsWith("'"))) {
+    cert = cert.slice(1, -1).trim();
   }
-  return cert;
+
+  // Replace escaped newlines
+  cert = cert.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+
+  // If base64-encoded string without PEM header, try decoding base64
+  if (!cert.includes('-----BEGIN CERTIFICATE-----') && cert.length > 50) {
+    try {
+      const decoded = Buffer.from(cert, 'base64').toString('utf8').trim();
+      if (decoded.includes('-----BEGIN CERTIFICATE-----')) {
+        cert = decoded;
+      }
+    } catch (e) {
+      // ignore decoding error if not base64
+    }
+  }
+
+  // If single line where spaces replaced newlines between header/body/footer
+  if (cert.includes('-----BEGIN CERTIFICATE-----') && !cert.includes('\n')) {
+    const beginMarker = '-----BEGIN CERTIFICATE-----';
+    const endMarker = '-----END CERTIFICATE-----';
+
+    const beginIdx = cert.indexOf(beginMarker);
+    const endIdx = cert.indexOf(endMarker);
+
+    if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
+      const body = cert.slice(beginIdx + beginMarker.length, endIdx).replace(/\s+/g, '');
+      const chunkedBody = body.match(/.{1,64}/g)?.join('\n') || body;
+      cert = `${beginMarker}\n${chunkedBody}\n${endMarker}`;
+    }
+  }
+
+  return cert.trim();
+}
+
+/**
+ * Safe diagnostic metadata getter for health check and logging.
+ * NEVER exposes passwords, tokens, or raw certificate contents.
+ */
+export function getSafeCaDiagnostics() {
+  const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
+  const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',').map((b) => b.trim()).filter(Boolean);
+  const rawCert = process.env.KAFKA_CA_CERT;
+  const normalizedCert = normalizeCaCert(rawCert);
+
+  return {
+    kafkaEnabled: isKafkaEnabled,
+    brokers,
+    caConfigured: Boolean(normalizedCert),
+    caLength: normalizedCert ? normalizedCert.length : 0,
+    caStartsWithBeginCertificate: normalizedCert ? normalizedCert.startsWith('-----BEGIN CERTIFICATE-----') : false,
+    caEndsWithEndCertificate: normalizedCert ? normalizedCert.endsWith('-----END CERTIFICATE-----') : false,
+    caHasNewlines: normalizedCert ? normalizedCert.includes('\n') : false,
+    sslRejectUnauthorized: true,
+    saslConfigured: Boolean(process.env.KAFKA_USERNAME || process.env.KAFKA_SASL_USERNAME),
+    saslMechanism: (process.env.KAFKA_SASL_MECHANISM || 'scram-sha-256').toLowerCase(),
+  };
 }
 
 function initKafkaClient() {
+  const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
+  const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',').map((b) => b.trim()).filter(Boolean);
+  const clientId = process.env.KAFKA_CLIENT_ID || 'syncchat-saas';
+
   if (!isKafkaEnabled || brokers.length === 0) {
     return null;
   }
@@ -73,6 +134,8 @@ function initKafkaClient() {
       };
     }
 
+    console.log('[KAFKA_TRACE] Initializing KafkaJS client with safe diagnostics:', getSafeCaDiagnostics());
+
     kafkaInstance = new Kafka(kafkaConfig);
     return kafkaInstance;
   } catch (err) {
@@ -86,6 +149,7 @@ function initKafkaClient() {
  * Get or create Kafka Producer instance.
  */
 export async function getKafkaProducer() {
+  const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
   if (!isKafkaEnabled) {
     return null;
   }
@@ -117,6 +181,7 @@ export async function getKafkaProducer() {
 export async function createKafkaConsumer(
   groupId = process.env.KAFKA_CONSUMER_GROUP || process.env.KAFKA_GROUP_ID || 'syncchat-broadcast-workers'
 ) {
+  const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
   if (!isKafkaEnabled) {
     return null;
   }
@@ -136,12 +201,17 @@ export async function createKafkaConsumer(
  * Check Kafka cluster connection health.
  */
 export async function checkKafkaHealth() {
+  const isKafkaEnabled = process.env.KAFKA_ENABLED === 'true';
+  const brokers = (process.env.KAFKA_BROKERS || 'localhost:9092').split(',').map((b) => b.trim()).filter(Boolean);
+  const diagnostics = getSafeCaDiagnostics();
+
   if (!isKafkaEnabled) {
     return {
       enabled: false,
       status: 'FALLBACK_MODE',
       mode: 'IN_PROCESS_ASYNC_QUEUE',
       brokers,
+      diagnostics,
     };
   }
 
@@ -151,6 +221,7 @@ export async function checkKafkaHealth() {
       enabled: true,
       status: 'KAFKA_CLIENT_NOT_INITIALIZED',
       brokers,
+      diagnostics,
     };
   }
 
@@ -166,6 +237,7 @@ export async function checkKafkaHealth() {
       clusterId: clusterInfo.clusterId,
       controller: clusterInfo.controller,
       brokers: clusterInfo.brokers,
+      diagnostics,
     };
   } catch (err) {
     return {
@@ -173,8 +245,11 @@ export async function checkKafkaHealth() {
       status: 'UNHEALTHY',
       error: err.message,
       brokers,
+      diagnostics,
     };
   }
 }
 
-export { isKafkaEnabled };
+export function isKafkaEnabled() {
+  return process.env.KAFKA_ENABLED === 'true';
+}
