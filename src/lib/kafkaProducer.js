@@ -1,4 +1,4 @@
-import { getKafkaProducer, fallbackBus, isKafkaEnabled } from './kafkaClient';
+import { getKafkaProducer, fallbackBus, isKafkaEnabled } from './kafkaClient.js';
 import crypto from 'crypto';
 
 export const KAFKA_TOPICS = {

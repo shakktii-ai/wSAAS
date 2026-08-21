@@ -26,15 +26,15 @@
  * buildTrackingUrl()    →  builds  <APP_URL>/api/track/click/<trackingId>
  */
 
-import connectDB from '@/lib/db';
-import Broadcast from '@/models/Broadcast';
-import Contact from '@/models/Contact';
-import Conversation from '@/models/Conversation';
-import CampaignRecipient from '@/models/CampaignRecipient';
-import CampaignClick from '@/models/CampaignClick';
-import Company from '@/models/Company';
-import { sendMetaTemplate, resolveWhatsAppCredentials } from '@/lib/metaWhatsAppService';
-import { saveOutboundMessage } from '@/lib/outboundMessageService';
+import connectDB from './db.js';
+import Broadcast from '../models/Broadcast.js';
+import Contact from '../models/Contact.js';
+import Conversation from '../models/Conversation.js';
+import CampaignRecipient from '../models/CampaignRecipient.js';
+import CampaignClick from '../models/CampaignClick.js';
+import Company from '../models/Company.js';
+import { sendMetaTemplate, resolveWhatsAppCredentials } from './metaWhatsAppService.js';
+import { saveOutboundMessage } from './outboundMessageService.js';
 import crypto from 'crypto';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

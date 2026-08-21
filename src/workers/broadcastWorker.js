@@ -1,14 +1,14 @@
-import connectDB from '@/lib/db';
-import Broadcast from '@/models/Broadcast';
-import Contact from '@/models/Contact';
-import Company from '@/models/Company';
-import Conversation from '@/models/Conversation';
-import CampaignRecipient from '@/models/CampaignRecipient';
-import { resolveWhatsAppCredentials, sendMetaTemplate } from '@/lib/metaWhatsAppService';
-import { resolveRecipientVariable, createClickRecord, finaliseBroadcast } from '@/lib/broadcastSchedulerService';
-import { saveOutboundMessage } from '@/lib/outboundMessageService';
-import { createKafkaConsumer, isKafkaEnabled, fallbackBus } from '@/lib/kafkaClient';
-import { publishKafkaJob, KAFKA_TOPICS } from '@/lib/kafkaProducer';
+import connectDB from '../lib/db.js';
+import Broadcast from '../models/Broadcast.js';
+import Contact from '../models/Contact.js';
+import Company from '../models/Company.js';
+import Conversation from '../models/Conversation.js';
+import CampaignRecipient from '../models/CampaignRecipient.js';
+import { resolveWhatsAppCredentials, sendMetaTemplate } from '../lib/metaWhatsAppService.js';
+import { resolveRecipientVariable, createClickRecord, finaliseBroadcast } from '../lib/broadcastSchedulerService.js';
+import { saveOutboundMessage } from '../lib/outboundMessageService.js';
+import { createKafkaConsumer, isKafkaEnabled, fallbackBus } from '../lib/kafkaClient.js';
+import { publishKafkaJob, KAFKA_TOPICS } from '../lib/kafkaProducer.js';
 
 const WORKER_ID = process.env.WORKER_ID || `worker-proc-${process.pid}`;
 const BATCH_SIZE = parseInt(process.env.KAFKA_CONCURRENCY || '10', 10);

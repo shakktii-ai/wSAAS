@@ -1,8 +1,8 @@
-import connectDB from '@/lib/db';
-import Message from '@/models/Message';
-import Conversation from '@/models/Conversation';
-import Contact from '@/models/Contact';
-import { socketService } from '@/lib/socketService';
+import connectDB from './db.js';
+import Message from '../models/Message.js';
+import Conversation from '../models/Conversation.js';
+import Contact from '../models/Contact.js';
+import { socketService } from './socketService.js';
 
 /**
  * Reusable Centralized Outbound Message Persistence Helper
