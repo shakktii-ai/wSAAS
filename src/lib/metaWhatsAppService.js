@@ -291,8 +291,14 @@ export async function createMetaTemplate({ wabaId, accessToken, name, category, 
 
   const endpoint = `${GRAPH_URL}/${wabaId}/message_templates`;
 
+  // Meta Graph API requires template names to start with a letter [a-z]
+  let cleanName = (name || '').toLowerCase().trim().replace(/[^a-z0-9_]/g, '_');
+  if (!/^[a-z]/.test(cleanName)) {
+    cleanName = `tpl_${cleanName}`;
+  }
+
   const requestData = {
-    name: name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+    name: cleanName,
     category,
     language,
     components,
@@ -308,9 +314,20 @@ export async function createMetaTemplate({ wabaId, accessToken, name, category, 
 
     return response.data;
   } catch (error) {
-    const errObj = error.response?.data?.error || { message: error.message };
-    console.error('Meta Create Template Error:', errObj);
-    throw new Error(errObj.message || 'Failed to create template on Meta Cloud API');
+    const errData = error.response?.data?.error;
+    const userTitle = errData?.error_user_title;
+    const userMsg = errData?.error_user_msg;
+    const metaMsg = errData?.message || error.message;
+
+    let finalMsg = metaMsg;
+    if (userMsg) {
+      finalMsg = userTitle ? `${userTitle}: ${userMsg}` : userMsg;
+    } else if (errData?.error_data?.details) {
+      finalMsg = `${metaMsg} (${errData.error_data.details})`;
+    }
+
+    console.error('Meta Create Template Error:', errData || error);
+    throw new Error(finalMsg || 'Failed to create template on Meta Cloud API');
   }
 }
 

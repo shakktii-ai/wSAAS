@@ -384,11 +384,10 @@ export const createNewTemplate = async (req, res) => {
       submit = false,
     } = req.body;
 
-    if (!name || !bodyText) {
-      return errorResponse(res, 'Template name and body text are required', 400);
+    let cleanName = (name || '').toLowerCase().trim().replace(/[^a-z0-9_]/g, '_');
+    if (!/^[a-z]/.test(cleanName)) {
+      cleanName = `tpl_${cleanName}`;
     }
-
-    const cleanName = name.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_');
 
     // Build Meta Components
     const components = buildMetaComponents({

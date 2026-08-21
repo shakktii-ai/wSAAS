@@ -702,78 +702,78 @@ export default function ContactsManager() {
         {/* Add Contact Modal */}
         <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Add New Enterprise Contact">
           {addError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> {addError}
+            <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-semibold">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" /> {addError}
             </div>
           )}
 
           <form onSubmit={handleCreateContact} className="space-y-4 text-xs">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Full Name *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Full Name *</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Marcus Vance"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Phone Number (with Country Code) *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Phone Number (with Country Code) *</label>
               <input
                 type="text"
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="15551234567"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Email</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="marcus@example.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Company</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Company</label>
                 <input
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="Acme Corp"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">City</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">City</label>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="San Francisco"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 font-medium mb-1">Tags (comma separated)</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Tags (comma separated)</label>
                 <input
                   type="text"
                   value={tagsStr}
                   onChange={(e) => setTagsStr(e.target.value)}
                   placeholder="VIP, Lead"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
                 />
               </div>
             </div>
